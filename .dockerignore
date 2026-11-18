@@ -1,0 +1,15 @@
+# Send only application source and dependency/build definitions to Docker.
+**
+!app/
+!app/**
+!requirements.txt
+!Dockerfile
+!.dockerignore
+
+# Exclude generated Python files even when inside app/.
+**/__pycache__/
+**/*.py[cod]
+**/.env
+**/.env.*
+**/*.pem
+**/*.key

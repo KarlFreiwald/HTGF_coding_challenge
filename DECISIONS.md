@@ -23,7 +23,9 @@ Decisions recorded: **18 November 2026**. These are design choices, not claims t
 
 **Tradeoff:** Adds container configuration and requires a running Docker engine. External API availability and credentials remain dependencies outside the container.
 
-**Verified:** Docker client/server communication, Docker Compose availability, and the `hello-world` container succeeded on the developer's machine. Application containerization is still to be implemented.
+**Verified:** Docker client/server communication, Docker Compose availability, and the `hello-world` container succeeded on the developer's machine.
+
+**Initial application setup:** One service packages the FastAPI backend and static frontend together, using Python 3.13, a non-root process, a local port mapping, and an HTTP health check. Source changes require rebuilding the image for now; live reload can be added later.
 
 ### 02 — Git for version control
 
@@ -99,9 +101,22 @@ Sources:
 - [AssemblyAI account and credit documentation](https://www.assemblyai.com/docs/faq/how-to-get-your-api-key)
 - [Deepgram Flux turn-detection configuration](https://developers.deepgram.com/docs/flux/configuration)
 
+### 08 — FastAPI for the web backend
+
+**Choice (18 November 2026):** Use FastAPI, served by Uvicorn. Serve plain frontend files from the same application in one Docker container initially.
+
+**Reason:** Native asynchronous and WebSocket support fit the planned audio connections and external API calls. Typed validation and generated API documentation will help with settings and structured results. A shared frontend/backend origin simplifies local development.
+
+**Alternative considered:** Flask, a small and flexible framework. Its standard WSGI request model is less convenient for our expected long-lived asynchronous connections and requires additional tooling for WebSockets.
+
+**Tradeoff:** Introduces ASGI, asynchronous application code, and Pydantic conventions. FastAPI itself does not guarantee the voice latency target; provider latency, turn detection, and audio handling still need measurement.
+
+**First implementation scope:** Static page, browser health check, `/health` endpoint, Docker build/run configuration, and startup documentation. Voice integration is the next checkpoint.
+
+**Validation (18 November 2026):** The Docker image built successfully and Compose reported a healthy service. Host HTTP checks passed for `/`, `/health`, both static assets, `/docs`, and `/openapi.json`; `/health` returned `{"status":"ok"}`. Browser rendering and JavaScript interaction have not yet been manually verified.
+
 ## Open decisions
 
-- Backend framework: **FastAPI is proposed**, with static frontend files served by the same application and an initial single-container setup.
 - LLM provider and model.
 - TTS provider, model, and voices for both languages.
 - Exact AssemblyAI streaming model, audio format, and turn-detection configuration.
