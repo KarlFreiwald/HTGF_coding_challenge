@@ -35,7 +35,7 @@ Decisions recorded: **18 November 2026**. These are design choices, not claims t
 
 **Verified (18 November 2026):** The local repository is initialized on `main`. A `.gitignore` excludes credentials, Python environments/caches, generated artifacts, and local runtime data; `.env.example` templates remain trackable. Ignore rules were checked against representative paths.
 
-**Backup decision (18 November 2026):** Use GitHub for an online backup. A private repository is proposed. The initial backup will include the challenge PDF, this decision log, and `.gitignore`. GitHub connection, repository creation, and the first push are still pending. Local commits must be pushed to update the online backup.
+**Backup decision (18 November 2026):** Use GitHub for an online backup. The user created [HTGF_coding_challenge](https://github.com/KarlFreiwald/HTGF_coding_challenge), which is configured as `origin`. The first commit (`43379fd`), containing the challenge PDF, this decision log, and `.gitignore`, was successfully pushed; local `main` tracks `origin/main`. Private visibility was recommended but has not been independently verified. Local commits must be pushed to update the online backup.
 
 ### 03 — Separate STT → LLM → TTS pipeline
 
@@ -108,7 +108,7 @@ Sources:
 - Browser/backend audio transport and whether to use a voice orchestration framework.
 - Storage for transcripts, timestamps, settings, and structured summaries.
 - Interview state management, summary schema, and whether to use tool calling.
-- Demonstration environment and GitHub repository setup for the requested backup.
+- Demonstration environment.
 
 ## How to maintain this log
 
