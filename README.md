@@ -41,10 +41,15 @@ that it is running, open:
 - Interactive HTTP API documentation: <http://localhost:8000/docs>
 
 Select **Deutsch** or **English**, click **Start recording**, allow microphone
-access, and wait for **Listening** before speaking. Click **Stop** to release the
+access, and wait for **Listening** before speaking. The same button switches to
+**Stop recording**; click it to release the
 microphone and finish the final transcript. The browser microphone indicator
 should turn off. Use a current Chrome or Edge browser for the first manual test.
 Microphone capture requires localhost or HTTPS.
+
+The button briefly shows **Stopping…** while the last transcript is received,
+then returns to **Start recording**. New turns appear at the top; updates to an
+existing turn replace its text in place without changing its position.
 
 The health endpoint returns `{"status":"ok"}`. It checks only our application,
 not provider availability or whether the API key is valid. HTTP API docs do not

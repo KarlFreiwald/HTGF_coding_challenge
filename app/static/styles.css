@@ -94,7 +94,6 @@ button:focus-visible {
   box-shadow: 0 0 0 6px var(--htgf-focus);
 }
 button:disabled { opacity: 0.65; cursor: not-allowed; }
-button.secondary { color: var(--htgf-black); background: var(--htgf-white); }
 .recording-controls { display: flex; gap: 24px; align-items: end; flex-wrap: wrap; }
 .recording-controls label { display: grid; gap: 8px; font-size: 0.875rem; }
 select {
@@ -106,7 +105,6 @@ select {
   padding: 12px 32px 12px 12px;
 }
 select:focus-visible { outline: 2px solid var(--htgf-black); outline-offset: 3px; }
-.button-group { display: flex; gap: 12px; flex-wrap: wrap; }
 .level-label { display: block; font-size: 0.75rem; }
 meter { width: 100%; height: 16px; }
 meter::-webkit-meter-bar { background: var(--htgf-fond); border: 1px solid var(--htgf-grey); }

@@ -1,8 +1,7 @@
 import { Microphone } from "/static/microphone.js";
 
 const statusText = document.querySelector("#connection-status");
-const startButton = document.querySelector("#start-recording");
-const stopButton = document.querySelector("#stop-recording");
+const recordingButton = document.querySelector("#recording-toggle");
 const language = document.querySelector("#language");
 const meter = document.querySelector("#microphone-level");
 const transcript = document.querySelector("#transcript");
@@ -27,8 +26,8 @@ function finish(session, message, isError = false) {
   if (current !== session) return;
   current = null;
   meter.value = 0;
-  startButton.disabled = false;
-  stopButton.disabled = true;
+  recordingButton.textContent = "Start recording";
+  recordingButton.disabled = false;
   language.disabled = false;
   setStatus(message, isError ? "error" : "ok");
 }
@@ -43,7 +42,7 @@ function updateTranscript(session, event) {
     label.className = "turn-label";
     const text = document.createElement("p");
     item.append(label, text);
-    transcript.append(item);
+    transcript.prepend(item);
     turn = { item, label, text, final: false };
     session.turns.set(event.turn_id, turn);
     emptyTranscript.hidden = true;
@@ -64,8 +63,8 @@ async function start() {
     turns: new Map(), ready: false, stopping: false, finished: false,
   };
   current = session;
-  startButton.disabled = true;
-  stopButton.disabled = false;
+  recordingButton.textContent = "Stop recording";
+  recordingButton.disabled = false;
   language.disabled = true;
   setStatus("Allow microphone access to begin.");
 
@@ -132,7 +131,8 @@ async function stop() {
   const session = current;
   if (!session || session.stopping) return;
   session.stopping = true;
-  stopButton.disabled = true;
+  recordingButton.textContent = "Stopping…";
+  recordingButton.disabled = true;
   if (!session.ready) {
     finish(session, "Recording cancelled.");
     return;
@@ -152,8 +152,7 @@ async function stop() {
   }
 }
 
-startButton.addEventListener("click", start);
-stopButton.addEventListener("click", stop);
+recordingButton.addEventListener("click", () => current ? stop() : start());
 window.addEventListener("pagehide", () => {
   if (current) finish(current, "Recording stopped.");
 });

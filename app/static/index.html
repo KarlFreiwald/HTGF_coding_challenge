@@ -23,10 +23,7 @@
               <option value="en">English</option>
             </select>
           </label>
-          <div class="button-group">
-            <button id="start-recording" type="button">Start recording</button>
-            <button id="stop-recording" class="secondary" type="button" disabled>Stop</button>
-          </div>
+          <button id="recording-toggle" type="button">Start recording</button>
         </div>
         <p id="connection-status" role="status" aria-live="polite">Ready when you are.</p>
         <label class="level-label" for="microphone-level">Microphone level</label>
@@ -35,7 +32,7 @@
       <section aria-labelledby="transcript-heading">
         <h2 id="transcript-heading">Live transcript</h2>
         <p id="empty-transcript" class="note">Your words will appear here as you speak.</p>
-        <ol id="transcript" aria-label="Transcribed turns"></ol>
+        <ol id="transcript" reversed aria-label="Transcribed turns, newest first"></ol>
         <p id="turn-announcement" class="sr-only" aria-live="polite"></p>
       </section>
       <p class="note">Transcription preview · No AI replies yet. Transcripts stay in this tab;

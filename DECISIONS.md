@@ -145,6 +145,16 @@ Sources:
 
 Sources: [AssemblyAI message sequence](https://www.assemblyai.com/docs/streaming/message-sequence), [streaming API](https://www.assemblyai.com/docs/streaming/api-spec/streaming-websocket), and [model selection](https://www.assemblyai.com/docs/streaming/select-the-speech-model).
 
+### 11 — One recording control and newest turns first
+
+**Choice (18 November 2026):** Use one button that switches between **Start recording** and **Stop recording**. Show new transcript turns at the top while keeping their original turn numbers.
+
+**Reason:** Only one recording action is relevant at a time, and the latest speech should be visible without scrolling through older turns.
+
+**Behavior:** The button can also cancel startup. It briefly shows **Stopping…** and is disabled while the final transcript is received, then resets on completion or error. Partial/final updates change the existing row rather than moving or duplicating it.
+
+**Prior checkpoint confirmation:** The developer reported that microphone transcription works in their browser. Detailed accuracy and turn-detection evaluation remain open.
+
 ## Open decisions
 
 - LLM provider and model.

@@ -40,6 +40,7 @@ function makeUI() {
     constructor() { this.children = []; this.dataset = {}; this.value = "de"; this.textContent = ""; }
     addEventListener(type, fn) { this[type] = fn; }
     append(...children) { this.children.push(...children); }
+    prepend(...children) { this.children.unshift(...children); }
     replaceChildren() { this.children = []; }
   }
   const elements = new Map();
@@ -76,9 +77,12 @@ function makeUI() {
   return { scope, elements, sockets, microphones };
 }
 
-test("Partial updates share one row; Stop sends last audio before command", async () => {
+test("One button starts/stops; newest turns stay on top without duplicate partials", async () => {
   const ui = makeUI();
-  await ui.scope.start();
+  const button = ui.elements.get("#recording-toggle");
+  await button.click();
+  assert.equal(button.textContent, "Stop recording");
+  assert.equal(button.disabled, false);
   const socket = ui.sockets[0];
   socket.onopen();
   socket.emit({ type: "ready" });
@@ -86,18 +90,24 @@ test("Partial updates share one row; Stop sends last audio before command", asyn
   socket.emit({ type: "transcript", turn_id: 0, text: "We build", final: false });
   const list = ui.elements.get("#transcript");
   assert.equal(list.children.length, 1);
-  await ui.scope.stop();
+  socket.emit({ type: "transcript", turn_id: 1, text: "Our team has five people.", final: true });
+  assert.equal(list.children.length, 2);
+  assert.equal(list.children[0].children[1].textContent, "Our team has five people.");
+  await button.click();
+  assert.equal(button.textContent, "Stopping…");
+  assert.equal(button.disabled, true);
   assert.equal(socket.sent.at(-2).byteLength, 9600);
   assert.equal(JSON.parse(socket.sent.at(-1)).type, "stop");
   assert.equal(ui.microphones[0].closed, true);
   socket.emit({ type: "transcript", turn_id: 0, text: "We build robots.", final: true });
   socket.emit({ type: "stopped" });
-  assert.equal(list.children.length, 1);
-  assert.equal(list.children[0].children[1].textContent, "We build robots.");
-  assert.equal(ui.elements.get("#start-recording").disabled, false);
-  assert.equal(ui.elements.get("#stop-recording").disabled, true);
+  assert.equal(list.children.length, 2);
+  assert.equal(list.children[0].children[1].textContent, "Our team has five people.");
+  assert.equal(list.children[1].children[1].textContent, "We build robots.");
+  assert.equal(button.textContent, "Start recording");
+  assert.equal(button.disabled, false);
   // Restart creates a fresh session and clears previous turns only when ready.
-  await ui.scope.start();
+  await button.click();
   ui.sockets[1].onopen();
   ui.sockets[1].emit({ type: "ready" });
   assert.equal(list.children.length, 0);
@@ -106,12 +116,15 @@ test("Partial updates share one row; Stop sends last audio before command", asyn
 
 test("Cancellation during permission setup cannot open a stale socket", async () => {
   const ui = makeUI();
-  const starting = ui.scope.start();
-  await ui.scope.stop();
+  const button = ui.elements.get("#recording-toggle");
+  const starting = button.click();
+  await button.click();
   await starting;
   assert.equal(ui.sockets.length, 0);
   assert.equal(ui.microphones[0].closed, true);
   assert.equal(ui.elements.get("#language").disabled, false);
+  assert.equal(button.textContent, "Start recording");
+  assert.equal(button.disabled, false);
 });
 
 test("Unexpected disconnect releases microphone and marks unfinished text", async () => {
@@ -125,5 +138,6 @@ test("Unexpected disconnect releases microphone and marks unfinished text", asyn
   assert.equal(ui.microphones[0].closed, true);
   assert.equal(ui.elements.get("#connection-status").dataset.state, "error");
   assert.equal(ui.elements.get("#transcript").children[0].children[0].textContent, "Incomplete turn");
-  assert.equal(ui.elements.get("#start-recording").disabled, false);
+  assert.equal(ui.elements.get("#recording-toggle").disabled, false);
+  assert.equal(ui.elements.get("#recording-toggle").textContent, "Start recording");
 });
