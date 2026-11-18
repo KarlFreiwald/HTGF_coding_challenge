@@ -60,6 +60,7 @@ Browser on localhost:8000
 | `.dockerignore` | Limits which files are sent to Docker during a build. |
 | `.gitignore` | Excludes local secrets and generated files from Git. |
 | `DECISIONS.md` | Records design choices and their tradeoffs. |
+| `UI_STYLE.md` | Records the HTGF palette and standing rules for UI styling. |
 
 Uvicorn listens on `0.0.0.0` **inside** the container so Docker can reach it.
 Compose publishes the port on `127.0.0.1` **on the host**, limiting access to the

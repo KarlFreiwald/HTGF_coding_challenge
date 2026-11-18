@@ -115,6 +115,18 @@ Sources:
 
 **Validation (18 November 2026):** The Docker image built successfully and Compose reported a healthy service. Host HTTP checks passed for `/`, `/health`, both static assets, `/docs`, and `/openapi.json`; `/health` returned `{"status":"ok"}`. Browser rendering and JavaScript interaction have not yet been manually verified.
 
+### 09 — Follow HTGF's visual identity
+
+**Choice (18 November 2026):** All UI styling must relate to the colors and style of [HTGF's website](https://www.htgf.de/), as requested by the developer. This is a standing rule for future UI changes.
+
+**Reason:** Make the demonstration visually relevant to the company while keeping the interface simple.
+
+**Implementation:** `UI_STYLE.md` records the observed website colors, sources, and styling guidance. `app/static/styles.css` centralizes the palette in reusable CSS variables. Replace the provisional green theme with warm neutrals, black text/buttons, coral/lime/mint accents, and pill-shaped controls.
+
+**Tradeoff:** Colors are taken from the actual website theme; typography and the small decorative gradient are approximations. Local font fallbacks keep the prototype self-contained. Exact brand assets and a complete visual reproduction are not part of this change.
+
+**Prior checkpoint confirmation:** The developer opened the initial page and confirmed that its browser health check displayed the expected connected status.
+
 ## Open decisions
 
 - LLM provider and model.
