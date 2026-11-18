@@ -127,12 +127,30 @@ Sources:
 
 **Prior checkpoint confirmation:** The developer opened the initial page and confirmed that its browser health check displayed the expected connected status.
 
+### 10 — Stream microphone audio through FastAPI
+
+**Choice (18 November 2026):** The browser streams audio to FastAPI, which opens the authenticated AssemblyAI connection and returns normalized transcript events.
+
+**Reason:** Keep credentials and conversation coordination in Python, with completed turns available to the future LLM stage.
+
+**Alternative considered:** Connect the browser directly to AssemblyAI using short-lived tokens. This removes a relay hop but adds token handling and a separate route for transcripts to reach the backend.
+
+**Tradeoff:** The relay adds a network hop and requires concurrent audio/transcript tasks and explicit session cleanup.
+
+**Initial implementation details:** Web Audio with an AudioWorklet, 100 ms mono PCM chunks at the browser's actual sample rate, provider model `assemblyai-stt-3-7-realtime-agent`, `balanced` turn detection, and `language_codes` steering toward the selected language. The API key comes from a Git-ignored `.env` injected by Compose at runtime. No voice framework is introduced for this bounded transcription step. The global provider endpoint is used; deployment region can be revisited later.
+
+**Session behavior:** Stop flushes the last audio chunk and waits for the last transcript before closing. Disconnects terminate the provider session, which is billed by connected duration. A 10-minute session limit and a missing-audio timeout bound abandoned sessions. Transcript updates reuse turn IDs. Data remains in the current browser view, with persistence deferred.
+
+**Validation:** Nine backend lifecycle tests and six JavaScript audio/UI tests passed using simulated peers. A real AssemblyAI connection accepted the key and model, streamed one second of synthetic silence through the relay, and terminated cleanly. Real microphone capture, speech accuracy, and end-of-turn timing still require the developer's browser test.
+
+Sources: [AssemblyAI message sequence](https://www.assemblyai.com/docs/streaming/message-sequence), [streaming API](https://www.assemblyai.com/docs/streaming/api-spec/streaming-websocket), and [model selection](https://www.assemblyai.com/docs/streaming/select-the-speech-model).
+
 ## Open decisions
 
 - LLM provider and model.
 - TTS provider, model, and voices for both languages.
-- Exact AssemblyAI streaming model, audio format, and turn-detection configuration.
-- Browser/backend audio transport and whether to use a voice orchestration framework.
+- Tune AssemblyAI turn detection against actual German/English founder answers.
+- Whether a voice orchestration framework will help once LLM/TTS and interruptions are added.
 - Storage for transcripts, timestamps, settings, and structured summaries.
 - Interview state management, summary schema, and whether to use tool calling.
 - Demonstration environment.

@@ -5,20 +5,41 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Startup Interview</title>
     <link rel="stylesheet" href="/static/styles.css">
-    <script src="/static/app.js" defer></script>
+    <script src="/static/app.js" type="module"></script>
   </head>
   <body>
     <main>
       <p class="eyebrow">HTGF coding challenge · Development preview</p>
       <h1>Every startup has a <em>story.</em></h1>
       <p class="intro">A space to talk about your team, your product, and what comes next.</p>
-      <section aria-labelledby="connection-heading">
-        <h2 id="connection-heading">Application connection</h2>
-        <p id="connection-status" role="status" aria-live="polite">Checking connection…</p>
-        <button id="check-connection" type="button">Check connection</button>
+      <section aria-labelledby="recording-heading">
+        <h2 id="recording-heading">Tell us about your startup</h2>
+        <p class="note">Choose your language, then start a live transcription.
+          Audio is sent to AssemblyAI while recording.</p>
+        <div class="recording-controls">
+          <label for="language">Conversation language
+            <select id="language">
+              <option value="de">Deutsch</option>
+              <option value="en">English</option>
+            </select>
+          </label>
+          <div class="button-group">
+            <button id="start-recording" type="button">Start recording</button>
+            <button id="stop-recording" class="secondary" type="button" disabled>Stop</button>
+          </div>
+        </div>
+        <p id="connection-status" role="status" aria-live="polite">Ready when you are.</p>
+        <label class="level-label" for="microphone-level">Microphone level</label>
+        <meter id="microphone-level" min="0" max="1" value="0">0</meter>
       </section>
-      <p class="note">First checkpoint: the interface and backend are connected.
-        Voice conversations will be added next.</p>
+      <section aria-labelledby="transcript-heading">
+        <h2 id="transcript-heading">Live transcript</h2>
+        <p id="empty-transcript" class="note">Your words will appear here as you speak.</p>
+        <ol id="transcript" aria-label="Transcribed turns"></ol>
+        <p id="turn-announcement" class="sr-only" aria-live="polite"></p>
+      </section>
+      <p class="note">Transcription preview · No AI replies yet. Transcripts stay in this tab;
+        starting a new recording replaces the previous transcript. Sessions end after 10 minutes.</p>
     </main>
   </body>
 </html>
