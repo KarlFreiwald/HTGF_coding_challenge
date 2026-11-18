@@ -2,12 +2,14 @@
 
 An incremental implementation of the AI voice-agent coding challenge.
 
-**Current checkpoint:** live microphone transcription in German or English.
-The browser sends PCM audio through FastAPI to AssemblyAI and displays partial
-and completed turns. The UI follows HTGF's palette (see `UI_STYLE.md`).
+**Current checkpoint:** microphone transcription plus written interview replies.
+The browser sends PCM audio through FastAPI to AssemblyAI. Completed turns go
+to the selected OpenAI model with conversation context, language, and tone.
+The UI follows HTGF's palette (see `UI_STYLE.md`).
 
-LLM replies, TTS, tone selection, interview logic, and persistent conversation
-history are not implemented yet. Transcripts stay in the current browser tab;
+TTS, persistent conversation history, and structured final summaries are not
+implemented yet. Interview progression currently uses prompting, not a separate
+state machine. Transcripts stay in the current browser tab;
 starting a successful new recording replaces the previous transcript.
 
 ## Run locally with Docker
@@ -24,10 +26,13 @@ If `.env` does not exist yet, copy the placeholder template:
 Copy-Item .env.example .env
 ```
 
-Edit `.env` locally and set `ASSEMBLYAI_API_KEY` to your AssemblyAI key. Keep the
-key private. Compose loads it into the backend at runtime; `.gitignore` excludes
+Edit `.env` locally and set `ASSEMBLYAI_API_KEY` and `OPENAI_API_KEY` to your
+respective provider keys. If you already have `.env`, add the missing entry
+without copying over the existing file. Keep the keys private. Compose loads
+them into the backend at runtime; `.gitignore` excludes
 it from Git and `.dockerignore` excludes it from the image. The page can load
-without a key, but starting transcription reports a configuration error.
+without keys. A missing AssemblyAI key prevents transcription; a missing OpenAI
+key produces a clear reply error while transcription continues.
 
 ```powershell
 docker compose up --build
@@ -40,7 +45,7 @@ that it is running, open:
 - Health response: <http://localhost:8000/health>
 - Interactive HTTP API documentation: <http://localhost:8000/docs>
 
-Select **Deutsch** or **English**, click **Start recording**, allow microphone
+Select language, tone, and model, click **Start recording**, allow microphone
 access, and wait for **Listening** before speaking. The same button switches to
 **Stop recording**; click it to release the
 microphone and finish the final transcript. The browser microphone indicator
@@ -50,6 +55,10 @@ Microphone capture requires localhost or HTTPS.
 The button briefly shows **Stopping…** while the last transcript is received,
 then returns to **Start recording**. New turns appear at the top; updates to an
 existing turn replace its text in place without changing its position.
+Introduce your startup first, then read the interviewer's question and answer
+aloud. Replies appear in the same conversation with an **Interviewer** label.
+Settings stay fixed during recording and apply to the next recording when changed.
+Stopping releases the microphone but lets already queued text replies finish.
 
 The health endpoint returns `{"status":"ok"}`. It checks only our application,
 not provider availability or whether the API key is valid. HTTP API docs do not
@@ -85,15 +94,23 @@ Browser microphone -> AudioWorklet -> 100 ms mono PCM chunks
     -> /ws/transcribe (FastAPI WebSocket)
     -> AssemblyAI streaming WebSocket
     -> partial/final transcript events -> browser
+
+Completed transcript -> browser interview queue (one request at a time)
+    -> POST /api/interview/reply (settings + conversation history)
+    -> interview instructions -> selected provider adapter -> OpenAI Responses API
+    -> written reply -> browser conversation
 ```
 
 | File | Purpose |
 | --- | --- |
 | `app/main.py` | Defines the FastAPI application and routes. |
 | `app/transcription.py` | Opens the authenticated STT session and relays audio/transcript events. |
+| `app/interview.py` | Validates settings/history and builds language/tone-aware interview instructions. |
+| `app/llm.py` | Defines the model catalog, provider interface, and OpenAI adapter. |
 | `app/static/index.html` | Provides the page structure. |
 | `app/static/styles.css` | Styles the page. |
 | `app/static/app.js` | Manages Start/Stop, connection state, and transcript updates. |
+| `app/static/interview.js` | Deduplicates final turns, queues replies, and retains this recording's context. |
 | `app/static/microphone.js` | Requests microphone access and manages the Web Audio graph. |
 | `app/static/pcm-worklet.js` | Converts samples to little-endian 16-bit mono PCM, with no audible output. |
 | `requirements.txt` | Pins the direct Python dependencies. |
@@ -135,6 +152,45 @@ Provider references: [streaming protocol](https://www.assemblyai.com/docs/stream
 [model selection](https://www.assemblyai.com/docs/streaming/select-the-speech-model),
 [language configuration](https://www.assemblyai.com/docs/streaming/multilingual-transcription).
 
+## Models and provider modularity
+
+`GET /api/interview/models` supplies the dropdown from `MODELS` in `app/llm.py`.
+The initial choices are `gpt-5.4-mini` (default) and `gpt-5.4`. Both use the
+OpenAI Responses API with reasoning effort `none` and a 500-token output cap
+for short replies. Model availability still depends on the API project's access
+and credits; the catalog is a configured allowlist, not an account access check.
+
+To add another OpenAI model, add a `ModelOption` with its model ID and supported
+parameters. To add a different provider, implement the asynchronous `TextProvider`
+interface, register its instance in `PROVIDERS`, and add its model entries.
+Keep its credentials in environment variables and translate provider errors into
+`ReplyError`. The UI displays the provider alongside each model automatically.
+Only the OpenAI adapter is implemented today; the others remain future choices.
+
+The backend owns instructions and accepts only user/assistant history, configured
+models, German/English, and professional/conversational tone. German professional
+uses Sie; conversational uses du. Unknown models and oversized history are
+rejected before a paid call. Full conversation history is sent on each request;
+we cap it at 120 messages, 8,000 characters per message, and 60,000 in total.
+
+Partial transcripts never trigger generation. Repeated final events for a turn
+are deduplicated. Speech finalized while a request is pending is queued for the
+next reply. Failed replies pause generation for that recording; there are no
+automatic retries or silent model fallbacks. A successful new recording cancels
+the old browser request and ignores late replies. Aborting a browser request
+does not guarantee that an already-started provider request stops billing.
+
+`store=False` avoids using OpenAI's stored response state; it is not a promise
+of zero provider retention. Our app keeps context only in browser memory and
+does not write conversations to disk. The backend is stateless for this checkpoint.
+Reloading or starting a new recording loses the current conversation context.
+Prompted topic coverage and follow-up limits need live evaluation; they are not
+deterministic workflow guarantees. Spoken output and latency tuning come later.
+
+References: [OpenAI text generation](https://developers.openai.com/api/docs/guides/text),
+[GPT-5.4 mini](https://developers.openai.com/api/docs/models/gpt-5.4-mini),
+[GPT-5.4](https://developers.openai.com/api/docs/models/gpt-5.4).
+
 ## Useful checks
 
 ```powershell
@@ -152,15 +208,17 @@ From PowerShell in the project directory, after building the image:
 
 ```powershell
 docker compose run --rm --no-deps -v "${PWD}/tests:/tests:ro" app python -m unittest discover -s /tests -v
-docker run --rm --mount "type=bind,source=$PWD,target=/work,readonly" --workdir /work node:22-slim node --test tests/browser-logic.test.cjs
+docker run --rm --mount "type=bind,source=$PWD,target=/work,readonly" --workdir /work node:22-slim node --test tests/browser-logic.test.cjs tests/interview-logic.test.cjs
 ```
 
 These tests simulate the provider/browser to check final transcript delivery,
 disconnect cleanup, invalid requests, timeouts, PCM conversion at three sample
 rates, duplicate partial updates, cancellation, and restart. They do not spend
-API credits. Node is used only for these tests, not by the application.
+API credits. Interview tests cover model/provider dispatch, validation, SDK error
+handling, final-turn deduplication, sequential history, and ignoring stale replies.
+Node is used only for these tests, not by the application.
 
-Validation completed: 9 Python and 6 JavaScript checks passed. A real provider
+Earlier transcription validation: 9 Python and 6 JavaScript checks passed. A real provider
 session accepted the configured model/key, received one second of synthetic
 silence through the relay, and terminated cleanly. This verifies connectivity,
 not actual speech accuracy or end-of-turn timing.
@@ -174,6 +232,18 @@ Manual browser checks still required:
 4. Stop immediately after speech and confirm the final words are retained.
 5. Deny microphone permission or disconnect the microphone and confirm a clear
    error and a usable Start button. Stop must release the microphone indicator.
+6. With an OpenAI API key configured, introduce your startup and confirm a relevant
+   written follow-up. Give a team fact and check that later replies remember it.
+7. Start fresh recordings with each model and both tones/languages; check German
+   Sie/du usage and that the selected model appears on replies.
+8. Stop while a reply is pending: it should still appear. Start another recording:
+   an old pending reply must not appear in the new conversation.
+
+Current checkpoint validation: 17 Python and 10 JavaScript tests passed.
+The rebuilt Compose service is healthy; HTTP checks passed for the page, assets,
+model catalog, API schema, and the expected missing-OpenAI-key response.
+The OpenAI integration is tested with simulated responses. A live paid-model
+test is deferred until the developer adds their API key and billing.
 
 Keep timing observations separate from the full end-of-speech-to-spoken-reply
 latency target, which cannot be measured until LLM and TTS are connected.

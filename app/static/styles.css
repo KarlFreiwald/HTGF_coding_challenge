@@ -113,6 +113,7 @@ meter::-moz-meter-bar { background: var(--htgf-mint); }
 #transcript { list-style: none; margin: 0; padding: 0; }
 #transcript li { padding: 16px 0; border-bottom: 1px solid var(--htgf-grey); }
 #transcript li:last-child { border-bottom: 0; }
+#transcript li[data-speaker="assistant"] { border-left: 3px solid var(--htgf-mint); padding-left: 16px; }
 #transcript p { margin: 8px 0 0; overflow-wrap: anywhere; white-space: pre-wrap; }
 #transcript [data-final="false"] p { font-style: italic; }
 .turn-label { font-size: 0.75rem; font-weight: 600; }
@@ -121,3 +122,6 @@ meter::-moz-meter-bar { background: var(--htgf-mint); }
 #connection-status { padding-left: 12px; border-left: 4px solid var(--htgf-grey); }
 #connection-status[data-state="ok"] { border-left-color: var(--htgf-mint); }
 #connection-status[data-state="error"] { border-left-color: var(--htgf-berry); }
+#reply-status { padding-left: 12px; border-left: 4px solid var(--htgf-grey); }
+#reply-status[data-state="ok"] { border-left-color: var(--htgf-mint); }
+#reply-status[data-state="error"] { border-left-color: var(--htgf-berry); }

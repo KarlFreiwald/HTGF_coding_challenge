@@ -5,12 +5,14 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.transcription import router as transcription_router
+from app.interview import router as interview_router
 
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 
 app = FastAPI(title="Startup Interview API", version="0.1.0")
 app.include_router(transcription_router)
+app.include_router(interview_router)
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 

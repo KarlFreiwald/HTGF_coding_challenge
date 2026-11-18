@@ -1,3 +1,4 @@
 fastapi==0.164.0
 uvicorn[standard]==0.54.0
 websockets==17.4
+openai==3.55.1

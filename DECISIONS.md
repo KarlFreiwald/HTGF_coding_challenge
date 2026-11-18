@@ -155,9 +155,56 @@ Sources: [AssemblyAI message sequence](https://www.assemblyai.com/docs/streaming
 
 **Prior checkpoint confirmation:** The developer reported that microphone transcription works in their browser. Detailed accuracy and turn-detection evaluation remain open.
 
+### 12 — Selectable models with a separate provider adapter
+
+**Choice (18 November 2026):** Start with OpenAI via its Responses API. Add model
+selection alongside language and tone. The developer selected GPT-5.4 mini as
+the initial default and GPT-5.4 as a comparison option, and requested the ability
+to add other providers later.
+
+**Reason:** Compare response quality, latency, and cost using the same interview.
+Keep provider SDK details outside interview instructions and frontend behavior.
+
+**Implementation:** A backend model registry supplies the UI dropdown and validates
+requests. A small asynchronous `TextProvider` interface separates interview logic
+from the OpenAI adapter. Another provider needs an adapter, credentials, and model
+entries; the interview endpoint and UI can remain the same. Only OpenAI is wired
+up now. Model access is checked by the provider at request time, with no fallback.
+
+**Checkpoint scope:** Completed transcript turns trigger written replies. The
+browser owns temporary history and serializes requests; Python owns the interview
+instructions. Settings are fixed per recording. The prompt covers the required
+topics, uses German/English and professional/conversational phrasing, and asks one
+question at a time. German tone uses the previously proposed Sie/du mapping.
+Topic coverage and the one-follow-up rule need live evaluation.
+
+**Tradeoffs:** Full-history requests are simple and make switching providers easier,
+but input cost grows with conversation length and a page reload loses context.
+Prompt-based progression is faster to build than a state machine but less
+deterministic. Non-streamed text replies are easier to inspect at this checkpoint;
+they do not establish the eventual spoken-response latency target. Both initial
+models use reasoning effort `none`, short output limits, and no automatic retries.
+OpenAI response storage is disabled, which does not guarantee zero provider retention.
+
+**Alternatives:** Hard-code one model (simpler, cannot compare in the UI), put SDK
+calls directly in the route (less separation), or introduce an orchestration
+framework now (more dependencies before requirements justify them).
+
+**Validation:** 17 Python and 10 JavaScript tests passed. Simulated-provider and
+browser-logic tests cover dispatch, settings, context, failures, duplicate turns,
+and cancellation, including dispatch to a simulated second provider. The
+rebuilt Docker service is healthy; local HTTP checks confirmed the model catalog
+and an actionable missing-key response without a provider call. The
+developer will configure the OpenAI API key and billing the following morning;
+live response quality, account access, and latency remain unverified.
+
+Sources: [OpenAI text generation](https://developers.openai.com/api/docs/guides/text),
+[GPT-5.4 mini](https://developers.openai.com/api/docs/models/gpt-5.4-mini),
+[GPT-5.4](https://developers.openai.com/api/docs/models/gpt-5.4).
+
 ## Open decisions
 
-- LLM provider and model.
+- Evaluate the two OpenAI models; choose and implement any additional provider.
 - TTS provider, model, and voices for both languages.
 - Tune AssemblyAI turn detection against actual German/English founder answers.
 - Whether a voice orchestration framework will help once LLM/TTS and interruptions are added.

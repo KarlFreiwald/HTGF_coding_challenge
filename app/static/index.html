@@ -14,8 +14,8 @@
       <p class="intro">A space to talk about your team, your product, and what comes next.</p>
       <section aria-labelledby="recording-heading">
         <h2 id="recording-heading">Tell us about your startup</h2>
-        <p class="note">Choose your language, then start a live transcription.
-          Audio is sent to AssemblyAI while recording.</p>
+        <p class="note">Choose your language, tone, and model, then introduce your startup.
+          Audio is sent to AssemblyAI; the conversation text is sent to OpenAI for interview replies.</p>
         <div class="recording-controls">
           <label for="language">Conversation language
             <select id="language">
@@ -23,19 +23,32 @@
               <option value="en">English</option>
             </select>
           </label>
-          <button id="recording-toggle" type="button">Start recording</button>
+          <label for="tone">Interview tone
+            <select id="tone">
+              <option value="professional">Professional</option>
+              <option value="conversational">Conversational</option>
+            </select>
+          </label>
+          <label for="model">Interview model
+            <select id="model" disabled aria-describedby="settings-note">
+              <option>Loading models…</option>
+            </select>
+          </label>
+          <button id="recording-toggle" type="button" disabled>Start recording</button>
         </div>
+        <p id="settings-note" class="note">Settings apply to the next recording and stay fixed while recording.</p>
         <p id="connection-status" role="status" aria-live="polite">Ready when you are.</p>
         <label class="level-label" for="microphone-level">Microphone level</label>
         <meter id="microphone-level" min="0" max="1" value="0">0</meter>
       </section>
       <section aria-labelledby="transcript-heading">
-        <h2 id="transcript-heading">Live transcript</h2>
+        <h2 id="transcript-heading">Conversation</h2>
+        <p id="reply-status" role="status" aria-live="polite">Interview replies will appear here after you speak.</p>
         <p id="empty-transcript" class="note">Your words will appear here as you speak.</p>
-        <ol id="transcript" reversed aria-label="Transcribed turns, newest first"></ol>
+        <ol id="transcript" reversed aria-label="Conversation, newest first"></ol>
         <p id="turn-announcement" class="sr-only" aria-live="polite"></p>
       </section>
-      <p class="note">Transcription preview · No AI replies yet. Transcripts stay in this tab;
+      <p class="note">Text reply preview · Spoken replies are coming next. Conversations stay in this tab;
         starting a new recording replaces the previous transcript. Sessions end after 10 minutes.</p>
     </main>
   </body>

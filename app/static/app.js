@@ -1,13 +1,61 @@
 import { Microphone } from "/static/microphone.js";
+import { Interview } from "/static/interview.js";
 
 const statusText = document.querySelector("#connection-status");
 const recordingButton = document.querySelector("#recording-toggle");
 const language = document.querySelector("#language");
+const model = document.querySelector("#model");
+const tone = document.querySelector("#tone");
+const replyStatus = document.querySelector("#reply-status");
 const meter = document.querySelector("#microphone-level");
 const transcript = document.querySelector("#transcript");
 const emptyTranscript = document.querySelector("#empty-transcript");
 const turnAnnouncement = document.querySelector("#turn-announcement");
 let current = null;
+let displayedInterview = null;
+let modelsReady = false;
+
+function setReplyStatus(text, state = "pending") {
+  replyStatus.textContent = text;
+  replyStatus.dataset.state = state;
+}
+
+async function loadModels() {
+  recordingButton.disabled = true;
+  try {
+    const response = await fetch("/api/interview/models");
+    if (!response.ok) throw new Error("Model list unavailable");
+    const data = await response.json();
+    if (!data.models?.length) throw new Error("No models configured");
+    model.replaceChildren();
+    for (const entry of data.models) {
+      const option = document.createElement("option");
+      option.value = entry.id;
+      option.textContent = `${entry.label} (${entry.provider})`;
+      model.append(option);
+    }
+    model.value = data.default;
+    modelsReady = true;
+    model.disabled = false;
+    recordingButton.disabled = false;
+  } catch {
+    setStatus("Could not load interview models. Check the application and reload this page.", "error");
+  }
+}
+
+function addReply(text, modelLabel) {
+  const item = document.createElement("li");
+  item.dataset.speaker = "assistant";
+  const label = document.createElement("span");
+  label.className = "turn-label";
+  label.textContent = `Interviewer · ${modelLabel}`;
+  const content = document.createElement("p");
+  content.textContent = text;
+  item.append(label, content);
+  transcript.prepend(item);
+  emptyTranscript.hidden = true;
+  turnAnnouncement.textContent = `Interviewer: ${text}`;
+}
 
 function setStatus(text, state = "pending") {
   statusText.textContent = text;
@@ -29,6 +77,8 @@ function finish(session, message, isError = false) {
   recordingButton.textContent = "Start recording";
   recordingButton.disabled = false;
   language.disabled = false;
+  model.disabled = false;
+  tone.disabled = false;
   setStatus(message, isError ? "error" : "ok");
 }
 
@@ -52,20 +102,27 @@ function updateTranscript(session, event) {
   turn.text.textContent = event.text;
   turn.final = event.final;
   turn.item.dataset.final = String(event.final);
-  turn.label.textContent = `Turn ${event.turn_id + 1} · ${event.final ? "Complete" : "Listening"}`;
-  if (event.final) turnAnnouncement.textContent = `Completed turn: ${event.text}`;
+  turn.label.textContent = `You · Turn ${event.turn_id + 1} · ${event.final ? "Complete" : "Listening"}`;
+  if (event.final) {
+    turnAnnouncement.textContent = `Completed turn: ${event.text}`;
+    session.interview.addTurn(event.turn_id, event.text);
+  }
 }
 
 async function start() {
-  if (current) return;
+  if (current || !modelsReady) return;
   const session = {
     microphone: new Microphone(), socket: null, timer: null,
     turns: new Map(), ready: false, stopping: false, finished: false,
+    settings: { model: model.value, language: language.value, tone: tone.value },
+    modelLabel: model.selectedOptions[0].textContent,
   };
   current = session;
   recordingButton.textContent = "Stop recording";
   recordingButton.disabled = false;
   language.disabled = true;
+  model.disabled = true;
+  tone.disabled = true;
   setStatus("Allow microphone access to begin.");
 
   try {
@@ -79,15 +136,21 @@ async function start() {
 
     socket.onopen = () => {
       if (session.finished) { socket.close(); return; }
-      socket.send(JSON.stringify({ type: "start", language: language.value, sample_rate: sampleRate }));
+      socket.send(JSON.stringify({ type: "start", language: session.settings.language, sample_rate: sampleRate }));
     };
     socket.onmessage = ({ data }) => {
       if (session.finished) return;
       try {
         const event = JSON.parse(data);
         if (event.type === "ready") {
+          if (session.ready) return;
           clearTimeout(session.timer);
           session.ready = true;
+          displayedInterview?.cancel();
+          session.interview = new Interview(session.settings,
+            (text) => addReply(text, session.modelLabel), setReplyStatus);
+          displayedInterview = session.interview;
+          setReplyStatus("Introduce your startup to begin. The interviewer will reply in writing.");
           transcript.replaceChildren();
           emptyTranscript.hidden = false;
           turnAnnouncement.textContent = "";
@@ -154,5 +217,8 @@ async function stop() {
 
 recordingButton.addEventListener("click", () => current ? stop() : start());
 window.addEventListener("pagehide", () => {
+  displayedInterview?.cancel();
   if (current) finish(current, "Recording stopped.");
 });
+
+const modelLoading = loadModels();
