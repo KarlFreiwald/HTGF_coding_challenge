@@ -282,10 +282,49 @@ Sources: [Haiku overview](https://platform.claude.com/docs/en/models/haiku-5-5/o
 [thinking configuration](https://platform.claude.com/docs/en/models/haiku-5-5/whats-new-haiku-5-5),
 [Python SDK](https://platform.claude.com/docs/en/cli-sdks-libraries/sdks/python).
 
+### 15 — ElevenLabs spoken replies with configurable Eric voice
+
+**Choice (19 November 2026):** Use ElevenLabs Flash v2.5 (`eleven_flash_v2_5`)
+and Eric (`cjVigY5qzO86Huf0OWal`) for both German and English initially. The developer
+selected ElevenLabs, saved a key, enabled Text to Speech and Voices Read permissions,
+and chose Eric as a starting voice. Set the voice/model through environment variables.
+
+**Reason and alternatives:** We compared ElevenLabs, Cartesia, and Google TTS.
+ElevenLabs offers a short integration path for multilingual conversational speech.
+The voice choice is reversible; listen to German before deciding whether separate
+language-specific voices are worthwhile.
+
+**Implementation:** Add a small backend REST adapter and `/api/speech` endpoint.
+Keep credentials server-side, bound text/audio size and timeouts, sanitize errors,
+and avoid automatic paid retries. Use the existing `httpx2` dependency directly.
+Show the text immediately, fetch a complete MP3, then play it through the microphone's
+already-open AudioContext. Keep the next model request queued until playback finishes.
+
+**Turn-taking:** Pause microphone forwarding from synthesis through playback and a
+300 ms echo tail. Send silence frames to maintain the STT session. Stop cancels
+pending replies and local audio immediately; final transcription can still complete.
+This supersedes the earlier behavior that allowed written replies to finish after Stop.
+TTS failure preserves the written reply and resumes listening.
+
+**Tradeoffs:** Buffering is easier to understand/debug but adds latency; streaming
+and voice interruptions are deferred. The user cannot talk over the agent at this
+checkpoint. Silence still counts as STT session time. Cancelling a browser request
+does not guarantee cancellation of provider billing. Eric's German pronunciation
+and the full speech-to-speech latency need manual evaluation. Provider retention
+is not overridden by our application.
+
+**Validation:** 38 Python and 18 JavaScript tests passed. Two short synthetic
+requests through the running `/api/speech` endpoint returned HTTP 200 and MP3
+audio with Eric: German took 4.00 seconds and English 0.60 seconds. These single
+full-download measurements do not establish language-specific performance or
+end-to-end voice latency. Browser playback and pronunciation remain manual checks.
+
+Source: [ElevenLabs text-to-speech API](https://elevenlabs.io/docs/api-reference/text-to-speech/convert).
+
 ## Open decisions
 
 - Evaluate Haiku interview quality and latency; compare other providers when available.
-- TTS provider, model, and voices for both languages.
+- Evaluate Eric in German/English and decide whether separate voices are needed.
 - Tune AssemblyAI turn detection against actual German/English founder answers.
 - Whether a voice orchestration framework will help once LLM/TTS and interruptions are added.
 - Storage for transcripts, timestamps, settings, and structured summaries.

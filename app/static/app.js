@@ -1,5 +1,6 @@
 import { Microphone } from "/static/microphone.js";
 import { Interview } from "/static/interview.js";
+import { Speech } from "/static/speech.js";
 
 const statusText = document.querySelector("#connection-status");
 const recordingButton = document.querySelector("#recording-toggle");
@@ -66,6 +67,8 @@ function finish(session, message, isError = false) {
   if (session.finished) return;
   session.finished = true;
   clearTimeout(session.timer);
+  session.interview?.cancel();
+  session.speech?.cancel();
   session.microphone.close();
   session.socket?.close();
   for (const turn of session.turns.values()) {
@@ -80,6 +83,7 @@ function finish(session, message, isError = false) {
   model.disabled = false;
   tone.disabled = false;
   setStatus(message, isError ? "error" : "ok");
+  setReplyStatus("Interview stopped. Written replies remain below.", "ok");
 }
 
 function updateTranscript(session, event) {
@@ -105,7 +109,7 @@ function updateTranscript(session, event) {
   turn.label.textContent = `You · Turn ${event.turn_id + 1} · ${event.final ? "Complete" : "Listening"}`;
   if (event.final) {
     turnAnnouncement.textContent = `Completed turn: ${event.text}`;
-    session.interview.addTurn(event.turn_id, event.text);
+    if (!session.stopping) session.interview.addTurn(event.turn_id, event.text);
   }
 }
 
@@ -147,10 +151,27 @@ async function start() {
           clearTimeout(session.timer);
           session.ready = true;
           displayedInterview?.cancel();
+          session.speech = new Speech(session.microphone.context, (message) => {
+            if (session.finished || session.stopping) return;
+            setStatus(message);
+            setReplyStatus(message);
+          });
           session.interview = new Interview(session.settings,
-            (text) => addReply(text, session.modelLabel), setReplyStatus);
+            async (text) => {
+              if (session.finished || session.stopping) return;
+              addReply(text, session.modelLabel);
+              try {
+                await session.speech.speak(text, session.settings.language);
+                if (session.finished || session.stopping) return;
+                setReplyStatus("Your turn. Answer aloud when you are ready.", "ok");
+              } catch (error) {
+                if (session.finished || session.stopping) return;
+                setReplyStatus(`${error.message} Read the written reply and continue aloud.`, "error");
+              }
+              setStatus("Listening. Your turn.", "ok");
+            }, setReplyStatus);
           displayedInterview = session.interview;
-          setReplyStatus("Introduce your startup to begin. The interviewer will reply in writing.");
+          setReplyStatus("Introduce your startup to begin. The interviewer will reply aloud and in writing.");
           transcript.replaceChildren();
           emptyTranscript.hidden = false;
           turnAnnouncement.textContent = "";
@@ -160,8 +181,11 @@ async function start() {
               finish(session, "The connection cannot keep up with the microphone. Please restart.", true);
               return;
             }
+            // Silence keeps STT connected without transcribing the agent's voice.
+            const muted = session.speech.muted || (session.stopping && session.stopMuted);
+            if (muted) new Uint8Array(buffer).fill(0);
             socket.send(buffer);
-            meter.value = Math.min(1, level * 5);
+            meter.value = muted ? 0 : Math.min(1, level * 5);
           }, () => finish(session, "Microphone capture stopped unexpectedly. Please restart.", true));
           setStatus("Listening. Speak naturally; completed turns will appear below.", "ok");
         } else if (event.type === "transcript") {
@@ -194,6 +218,10 @@ async function stop() {
   const session = current;
   if (!session || session.stopping) return;
   session.stopping = true;
+  session.stopMuted = session.speech?.muted;
+  session.interview?.cancel();
+  session.speech?.cancel();
+  setReplyStatus("Stopping the interview…");
   recordingButton.textContent = "Stopping…";
   recordingButton.disabled = true;
   if (!session.ready) {

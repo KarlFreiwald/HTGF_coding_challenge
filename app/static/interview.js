@@ -38,14 +38,15 @@ export class Interview {
         signal: this.controller.signal,
       });
       const data = await response.json();
+      clearTimeout(timer);
       if (this.cancelled) return;
       if (!response.ok) {
         throw new Error(typeof data.detail === "string" ? data.detail : "The conversation request was rejected. Start a new recording.");
       }
       if (typeof data.text !== "string" || !data.text.trim()) throw new Error("No interview reply was returned.");
       this.history.push({ role: "assistant", content: data.text });
-      this.onReply(data.text);
-      this.onStatus("Reply ready. Read the question below, then answer aloud while recording.", "ok");
+      // Keep turns serialized until the written reply has finished speaking.
+      await this.onReply(data.text);
     } catch (error) {
       if (this.cancelled) return;
       this.failed = true;

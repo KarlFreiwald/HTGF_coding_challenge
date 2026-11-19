@@ -16,7 +16,8 @@
         <h2 id="recording-heading">Tell us about your startup</h2>
         <p class="note">Choose your language, tone, and model, then introduce your startup.
           Audio is sent to AssemblyAI; conversation text is sent to the selected model provider
-          (Anthropic, Google Gemini, or OpenAI) for interview replies.</p>
+          (Anthropic, Google Gemini, or OpenAI) for interview replies.
+          Reply text is sent to ElevenLabs for spoken playback.</p>
         <div class="recording-controls">
           <label for="language">Conversation language
             <select id="language">
@@ -49,7 +50,8 @@
         <ol id="transcript" reversed aria-label="Conversation, newest first"></ol>
         <p id="turn-announcement" class="sr-only" aria-live="polite"></p>
       </section>
-      <p class="note">Text reply preview · Spoken replies are coming next. Conversations stay in this tab;
+      <p class="note">Voice interview preview · Wait until the interviewer finishes speaking before answering.
+        Conversations stay in this tab;
         starting a new recording replaces the previous transcript. Sessions end after 10 minutes.</p>
     </main>
   </body>

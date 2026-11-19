@@ -2,12 +2,13 @@
 
 An incremental implementation of the AI voice-agent coding challenge.
 
-**Current checkpoint:** microphone transcription plus written interview replies.
+**Current checkpoint:** microphone transcription plus written and spoken interview replies.
 The browser sends PCM audio through FastAPI to AssemblyAI. Completed turns go
 to the selected Anthropic, Gemini, or OpenAI model with conversation context, language, and tone.
+ElevenLabs reads each reply aloud using Eric and Flash v2.5.
 The UI follows HTGF's palette (see `UI_STYLE.md`).
 
-TTS, persistent conversation history, and structured final summaries are not
+Persistent conversation history and structured final summaries are not
 implemented yet. Interview progression currently uses prompting, not a separate
 state machine. Transcripts stay in the current browser tab;
 starting a successful new recording replaces the previous transcript.
@@ -28,7 +29,8 @@ Copy-Item .env.example .env
 
 Edit `.env` locally and set `ASSEMBLYAI_API_KEY` for transcription, plus
 `ANTHROPIC_API_KEY` for Claude, `GEMINI_API_KEY` for Gemini, and/or
-`OPENAI_API_KEY` for OpenAI replies. You only
+`OPENAI_API_KEY` for OpenAI replies. Set `ELEVENLABS_API_KEY` for spoken replies
+(Text to Speech permission; Voices Read is useful for browsing voices). You only
 need the key for the selected interview provider. If you already have `.env`, add the missing entry
 without copying over the existing file. Keep the keys private. Compose loads
 them into the backend at runtime; `.gitignore` excludes
@@ -57,10 +59,13 @@ Microphone capture requires localhost or HTTPS.
 The button briefly shows **Stopping…** while the last transcript is received,
 then returns to **Start recording**. New turns appear at the top; updates to an
 existing turn replace its text in place without changing its position.
-Introduce your startup first, then read the interviewer's question and answer
-aloud. Replies appear in the same conversation with an **Interviewer** label.
+Introduce your startup first, then listen to the interviewer's question and answer
+aloud once the status returns to **Listening**. Replies also appear in the conversation
+with an **Interviewer** label. Microphone forwarding pauses while speech is generated
+and played; this checkpoint does not support interrupting the interviewer by speaking.
 Settings stay fixed during recording and apply to the next recording when changed.
-Stopping releases the microphone but lets already queued text replies finish.
+Stopping releases the microphone, stops playback, and cancels pending replies.
+The final transcript still arrives, but does not trigger a new reply after Stop.
 
 The health endpoint returns `{"status":"ok"}`. It checks only our application,
 not provider availability or whether the API key is valid. HTTP API docs do not
@@ -102,6 +107,8 @@ Completed transcript -> browser interview queue (one request at a time)
     -> interview instructions -> selected provider adapter
     -> Anthropic Messages API, Gemini Interactions API, or OpenAI Responses API
     -> written reply -> browser conversation
+    -> POST /api/speech (reply text + language)
+    -> ElevenLabs Flash v2.5 -> complete MP3 -> browser AudioContext playback
 ```
 
 | File | Purpose |
@@ -110,10 +117,12 @@ Completed transcript -> browser interview queue (one request at a time)
 | `app/transcription.py` | Opens the authenticated STT session and relays audio/transcript events. |
 | `app/interview.py` | Validates settings/history and builds language/tone-aware interview instructions. |
 | `app/llm.py` | Defines the model catalog, provider interface, and Anthropic/Gemini/OpenAI adapters. |
+| `app/speech.py` | Validates speech requests and calls ElevenLabs with server-side voice configuration. |
 | `app/static/index.html` | Provides the page structure. |
 | `app/static/styles.css` | Styles the page. |
 | `app/static/app.js` | Manages Start/Stop, connection state, and transcript updates. |
 | `app/static/interview.js` | Deduplicates final turns, queues replies, and retains this recording's context. |
+| `app/static/speech.js` | Fetches/decodes audio, controls playback, and gates microphone forwarding. |
 | `app/static/microphone.js` | Requests microphone access and manages the Web Audio graph. |
 | `app/static/pcm-worklet.js` | Converts samples to little-endian 16-bit mono PCM, with no audible output. |
 | `requirements.txt` | Pins the direct Python dependencies. |
@@ -204,7 +213,7 @@ of zero provider retention. Our app keeps context only in browser memory and
 does not write conversations to disk. The backend is stateless for this checkpoint.
 Reloading or starting a new recording loses the current conversation context.
 Prompted topic coverage and follow-up limits need live evaluation; they are not
-deterministic workflow guarantees. Spoken output and latency tuning come later.
+deterministic workflow guarantees. Full-pipeline latency still needs measurement and tuning.
 
 References: [OpenAI text generation](https://developers.openai.com/api/docs/guides/text),
 [GPT-5.4 mini](https://developers.openai.com/api/docs/models/gpt-5.4-mini),
@@ -215,6 +224,40 @@ Gemini references: [Interactions API](https://aistudio.google.com/docs/interacti
 Anthropic references: [Haiku 5.5](https://platform.claude.com/docs/en/models/haiku-5-5/overview),
 [pricing](https://platform.claude.com/docs/en/about-claude/pricing), and
 [Python SDK](https://platform.claude.com/docs/en/cli-sdks-libraries/sdks/python).
+
+## Spoken replies
+
+The backend defaults to Eric (`cjVigY5qzO86Huf0OWal`) with `eleven_flash_v2_5`.
+To change the voice, set `ELEVENLABS_VOICE_ID` in `.env` and recreate the container;
+no source edit or image rebuild is needed. `ELEVENLABS_TTS_MODEL` is also configurable.
+Both German and English pass an explicit language code to ElevenLabs. Eric's
+voice is English-labelled; German pronunciation and preferred speaking style need
+a listening test before choosing language-specific voices.
+
+We call the small ElevenLabs REST surface directly using `httpx2`, already used by
+the model SDKs and now pinned as a direct dependency. The endpoint accepts at most
+4,000 characters and returns MP3 at 44.1 kHz / 128 kbps with `Cache-Control: no-store`.
+Errors are sanitized, responses are size/time bounded, and no paid request is
+automatically retried. If synthesis or playback fails, the text remains visible
+and the microphone resumes forwarding. Stop cancels the browser request and
+immediately stops local playback; an already-started provider call may still bill.
+
+The browser reuses the AudioContext opened by the Start button. This avoids a
+separate autoplaying audio element. While synthesizing/playing, it sends zeroed PCM
+frames to STT, keeping the connection alive without feeding speaker audio back
+into recognition. It waits another 300 ms after playback to cover buffered capture
+and speaker echo. This is simple turn-taking, not voice interruption handling.
+STT session time remains billable during silence. The interview queue waits for
+playback before issuing another model request. Microphone capture stays open until
+Stop even while forwarding is paused.
+
+This checkpoint buffers a complete model reply and a complete MP3 before playback.
+It makes cancellation and sequencing easier to inspect, but adds latency compared
+with streaming text/audio. We have not established the PDF's <1–2 second target.
+No generated audio is saved by the application; provider retention follows their
+account policies. Conversation persistence and summaries remain separate next steps.
+
+Reference: [ElevenLabs text-to-speech API](https://elevenlabs.io/docs/api-reference/text-to-speech/convert).
 
 ## Useful checks
 
@@ -233,7 +276,7 @@ From PowerShell in the project directory, after building the image:
 
 ```powershell
 docker compose run --rm --no-deps -v "${PWD}/tests:/tests:ro" app python -m unittest discover -s /tests -v
-docker run --rm --mount "type=bind,source=$PWD,target=/work,readonly" --workdir /work node:22-slim node --test tests/browser-logic.test.cjs tests/interview-logic.test.cjs
+docker run --rm --mount "type=bind,source=$PWD,target=/work,readonly" --workdir /work node:22-slim node --test tests/browser-logic.test.cjs tests/interview-logic.test.cjs tests/speech-logic.test.cjs
 ```
 
 These tests simulate the provider/browser to check final transcript delivery,
@@ -261,15 +304,20 @@ Manual browser checks still required:
    written follow-up. Give a team fact and check that later replies remember it.
 7. Start fresh recordings with each model and both tones/languages; check German
    Sie/du usage and that the selected model appears on replies.
-8. Stop while a reply is pending: it should still appear. Start another recording:
-   an old pending reply must not appear in the new conversation.
+8. Check that replies play aloud in both languages and that Eric's own speech does
+   not appear as a founder turn. The microphone meter should stay at zero while
+   speech is generated/played, then resume when the status says Listening.
+9. Stop while a model reply is pending, during speech generation, and during playback:
+   no late reply/audio should appear, and playback should stop immediately.
+   Start another recording and confirm a fresh conversation without stale audio.
+10. Test with speakers as well as headphones. Check German names, numbers, and
+    English startup terminology. Measure from the end of your speech to audible playback.
 
-Current backend validation: 31 Python tests passed, including seven Anthropic
+Previous backend checkpoint: 31 Python tests passed, including seven Anthropic
 and seven Gemini tests using real SDKs with fake HTTP transports. They check
 history serialization, reply extraction, missing keys, sanitized errors, timeouts,
 cancellation, output limits, and disabled retries/continuations.
-The previous frontend checkpoint's 10 JavaScript
-tests passed; this integration does not change frontend conversation logic.
+The previous frontend checkpoint's 10 JavaScript tests passed.
 The rebuilt service is healthy and its catalog defaults to Haiku with all four
 models available. One live request through `/api/interview/reply` using synthetic
 startup history returned a relevant German follow-up in 1.48 seconds on 19 November.
@@ -283,8 +331,19 @@ timeout was not increased to hide the failure.
 OpenAI still has simulated-response validation only; live account access remains
 unverified until an OpenAI key is configured.
 
-Keep timing observations separate from the full end-of-speech-to-spoken-reply
-latency target, which cannot be measured until LLM and TTS are connected.
+TTS checkpoint (19 November): all 38 Python and 18 JavaScript tests passed.
+New checks cover the synthesis request contract, language/voice configuration,
+errors, input bounds, silence forwarding, sequential playback, and cancellation
+during fetch, decoding, playback, and the echo tail. The rebuilt app is healthy.
+Two synthetic requests through `/api/speech` returned HTTP 200 and MP3 data using
+the saved key: the German sample took 4.00 seconds; the English sample
+took 0.60 seconds. These are single full-download timings, not a language comparison
+or end-to-end latency benchmark. Local samples are in ignored `recordings/eric-de.mp3`
+and `recordings/eric-en.mp3`. Browser audibility, autoplay behavior, pronunciation,
+and acoustic echo still need the manual checks above.
+
+Keep individual API timing observations separate from the full
+end-of-speech-to-spoken-reply latency measured in the browser.
 
 ## GitHub backup
 

@@ -66,3 +66,20 @@ test("API error stops paid retries and preserves the transcript history", async 
   assert.equal(ui.statuses.at(-1)[1], "error");
   assert.match(ui.statuses.at(-1)[0], /OPENAI_API_KEY/);
 });
+
+test("The next model request waits for speech playback to finish", async () => {
+  const ui = makeInterview();
+  let finishSpeech;
+  ui.interview.onReply = () => new Promise((resolve) => { finishSpeech = resolve; });
+  ui.interview.addTurn(0, "Our startup builds robots.");
+  ui.calls[0].resolve({ text: "Who is on the team?" });
+  await tick();
+  ui.interview.addTurn(1, "Five engineers.");
+  assert.equal(ui.calls.length, 1);
+  finishSpeech();
+  await tick();
+  assert.equal(ui.calls.length, 2);
+  ui.interview.cancel();
+  ui.calls[1].resolve({ text: "Ignored" });
+  await tick();
+});

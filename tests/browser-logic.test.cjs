@@ -48,6 +48,12 @@ function makeUI() {
   const sockets = [];
   const microphones = [];
   const interviews = [];
+  const speeches = [];
+  class Speech {
+    constructor() { this.muted = false; speeches.push(this); }
+    async speak(text, language) { this.text = text; this.language = language; }
+    cancel() { this.cancelled = true; this.muted = false; }
+  }
   class Interview {
     constructor(settings, onReply) { this.settings = settings; this.onReply = onReply; this.turns = []; interviews.push(this); }
     addTurn(id, text) { this.turns.push({ id, text }); }
@@ -68,7 +74,7 @@ function makeUI() {
     emit(event) { this.onmessage({ data: JSON.stringify(event) }); }
   }
   const scope = vm.createContext({
-    Microphone, Interview, WebSocket: Socket, setTimeout, clearTimeout,
+    Microphone, Interview, Speech, WebSocket: Socket, setTimeout, clearTimeout,
     fetch: async () => ({ ok: true, json: async () => ({ default: "gpt-5.4-mini", models: [{ id: "gpt-5.4-mini", label: "GPT-5.4 mini", provider: "openai" }] }) }),
     location: { protocol: "http:", host: "localhost:8000" },
     window: { addEventListener() {} },
@@ -83,7 +89,7 @@ function makeUI() {
   const source = fs.readFileSync("app/static/app.js", "utf8").replace(/^import .*;\s*/gm, "");
   vm.runInContext(source, scope);
   elements.get("#tone").value = "professional";
-  return { scope, elements, sockets, microphones, interviews, ready: vm.runInContext("modelLoading", scope) };
+  return { scope, elements, sockets, microphones, interviews, speeches, ready: vm.runInContext("modelLoading", scope) };
 }
 
 test("One button starts/stops; newest turns stay on top without duplicate partials", async () => {
@@ -154,7 +160,7 @@ test("Unexpected disconnect releases microphone and marks unfinished text", asyn
   assert.equal(ui.elements.get("#recording-toggle").textContent, "Start recording");
 });
 
-test("Only final turns reach the interview; stopping keeps final replies and restart cancels old work", async () => {
+test("Final turns trigger speech; muted audio becomes silence; Stop cancels replies and restart is clean", async () => {
   const ui = makeUI();
   await ui.ready;
   await ui.scope.start();
@@ -167,19 +173,49 @@ test("Only final turns reach the interview; stopping keeps final replies and res
   assert.equal(ui.elements.get("#model").disabled, true);
   socket.emit({ type: "transcript", turn_id: 0, text: "We build", final: false });
   assert.equal(interview.turns.length, 0);
-  await ui.scope.stop();
   socket.emit({ type: "transcript", turn_id: 0, text: "We build robots.", final: true });
-  socket.emit({ type: "stopped" });
-  assert.equal(interview.turns.length, 1);
-  assert.equal(interview.cancelled, undefined);
-  interview.onReply("<b>Who is on your team?</b>");
+  await interview.onReply("<b>Who is on your team?</b>");
   const list = ui.elements.get("#transcript");
   assert.equal(list.children[0].dataset.speaker, "assistant");
   assert.equal(list.children[0].children[1].textContent, "<b>Who is on your team?</b>");
+  assert.equal(ui.speeches[0].text, "<b>Who is on your team?</b>");
+  assert.equal(ui.speeches[0].language, "de");
+  ui.speeches[0].muted = true;
+  const audio = new Uint8Array(9600).fill(42);
+  ui.microphones[0].onAudio(audio.buffer, 0.5);
+  assert.equal(audio.every((value) => value === 0), true);
+  assert.equal(ui.elements.get("#microphone-level").value, 0);
+  ui.speeches[0].muted = false;
+  const unmuted = new Uint8Array(9600).fill(42);
+  ui.microphones[0].onAudio(unmuted.buffer, 0.5);
+  assert.equal(unmuted[0], 42);
+  await ui.scope.stop();
+  socket.emit({ type: "transcript", turn_id: 1, text: "Final words.", final: true });
+  socket.emit({ type: "stopped" });
+  assert.equal(interview.turns.length, 1);
+  assert.equal(interview.cancelled, true);
+  assert.equal(ui.speeches[0].cancelled, true);
+  await interview.onReply("Late reply");
+  assert.equal(list.children.length, 3);
+  assert.equal(list.children[0].children[1].textContent, "Final words.");
   await ui.scope.start();
   ui.sockets[1].onopen();
   ui.sockets[1].emit({ type: "ready" });
   assert.equal(interview.cancelled, true);
   assert.equal(list.children.length, 0);
   ui.sockets[1].emit({ type: "stopped" });
+});
+
+test("Speech failure retains the written reply and returns to listening", async () => {
+  const ui = makeUI();
+  await ui.ready;
+  await ui.scope.start();
+  ui.sockets[0].onopen();
+  ui.sockets[0].emit({ type: "ready" });
+  ui.speeches[0].speak = async () => { throw new Error("Speech unavailable"); };
+  await ui.interviews[0].onReply("Who is on your team?");
+  assert.equal(ui.elements.get("#transcript").children[0].children[1].textContent, "Who is on your team?");
+  assert.equal(ui.elements.get("#reply-status").dataset.state, "error");
+  assert.match(ui.elements.get("#connection-status").textContent, /Listening/);
+  ui.sockets[0].emit({ type: "stopped" });
 });
