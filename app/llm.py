@@ -4,6 +4,7 @@ import os
 from dataclasses import dataclass, field
 from typing import Protocol
 
+import anthropic
 from google import genai
 # The pinned SDK's Interactions errors differ from google.genai.errors (used by
 # generate_content). Keep this SDK-specific import inside the provider module.
@@ -23,13 +24,16 @@ class ModelOption:
 # This allowlist is also the source of the UI dropdown. Check parameter support
 # and account access before adding a model; never silently substitute one.
 MODELS = {
+    "claude-haiku-5-5": ModelOption("Claude Haiku 5.5", "anthropic", "claude-haiku-5-5", {
+        "thinking": {"type": "disabled"}, "output_config": {"effort": "low"},
+    }),
     "gemini-3.8-flash": ModelOption("Gemini 3.8 Flash", "gemini", "gemini-3.8-flash", {
         "generation_config": {"thinking_level": "low", "max_output_tokens": 1024},
     }),
     "gpt-5.4-mini": ModelOption("GPT-5.4 mini", "openai", "gpt-5.4-mini", {"reasoning": {"effort": "none"}}),
     "gpt-5.4": ModelOption("GPT-5.4", "openai", "gpt-5.4", {"reasoning": {"effort": "none"}}),
 }
-DEFAULT_MODEL = "gemini-3.8-flash"
+DEFAULT_MODEL = "claude-haiku-5-5"
 
 
 class ReplyError(Exception):
@@ -127,4 +131,46 @@ class GeminiProvider:
         return text
 
 
-PROVIDERS: dict[str, TextProvider] = {"openai": OpenAIProvider(), "gemini": GeminiProvider()}
+class AnthropicProvider:
+    async def reply(self, model: ModelOption, instructions: str, messages: list[dict[str, str]]) -> str:
+        key = os.getenv("ANTHROPIC_API_KEY", "").strip()
+        if not key:
+            raise ReplyError("Add ANTHROPIC_API_KEY to .env and recreate the container to enable Claude replies.", 503)
+        try:
+            async with anthropic.AsyncAnthropic(api_key=key, timeout=25.0, max_retries=0) as client:
+                response = await client.messages.create(
+                    model=model.api_model,
+                    system=instructions,
+                    messages=messages,
+                    max_tokens=500,
+                    **model.options,
+                )
+        except anthropic.APITimeoutError:
+            raise ReplyError("Claude took too long to respond. Try a new recording.", 504) from None
+        except anthropic.APIConnectionError:
+            raise ReplyError("Could not reach Anthropic. Check the connection and try a new recording.") from None
+        except anthropic.APIStatusError as error:
+            if error.status_code in (401, 403):
+                message = "Anthropic rejected access. Check ANTHROPIC_API_KEY and this API project's permissions."
+            elif error.status_code == 404:
+                message = "This Claude model is unavailable to this API project. Check access or select another model."
+            elif error.status_code == 429:
+                message = "Anthropic reported a quota or rate limit. Check API billing and usage limits."
+            elif error.status_code == 400:
+                message = "Anthropic rejected the request. Check API credits and the configured model parameters."
+            else:
+                message = "Anthropic could not generate a reply. Try a new recording."
+            raise ReplyError(message) from None
+        except anthropic.APIError:
+            raise ReplyError("Anthropic returned an unexpected response. Try a new recording.") from None
+        if response.stop_reason == "refusal":
+            raise ReplyError("Claude declined this request. Try a new recording with a startup introduction.")
+        text = "\n".join(block.text for block in response.content if block.type == "text").strip()
+        if response.stop_reason != "end_turn" or not text:
+            raise ReplyError("Claude returned an incomplete or empty reply. Try a new recording.")
+        return text
+
+
+PROVIDERS: dict[str, TextProvider] = {
+    "openai": OpenAIProvider(), "gemini": GeminiProvider(), "anthropic": AnthropicProvider(),
+}

@@ -108,10 +108,9 @@ class GeminiTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(asyncio.CancelledError):
             await self.call_provider(handler)
 
-    async def test_catalog_default_and_request_validation_include_gemini(self):
+    async def test_catalog_and_request_validation_include_gemini(self):
         catalog = await interview.models()
-        self.assertEqual(catalog["default"], "gemini-3.8-flash")
-        self.assertEqual({item["provider"] for item in catalog["models"]}, {"gemini", "openai"})
+        self.assertIn({"id": "gemini-3.8-flash", "label": "Gemini 3.8 Flash", "provider": "gemini"}, catalog["models"])
         request = interview.ReplyRequest(
             model="gemini-3.8-flash", language="de", tone="professional",
             messages=[{"role": "user", "content": "Hallo"}],

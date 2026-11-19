@@ -4,7 +4,7 @@ An incremental implementation of the AI voice-agent coding challenge.
 
 **Current checkpoint:** microphone transcription plus written interview replies.
 The browser sends PCM audio through FastAPI to AssemblyAI. Completed turns go
-to the selected Gemini or OpenAI model with conversation context, language, and tone.
+to the selected Anthropic, Gemini, or OpenAI model with conversation context, language, and tone.
 The UI follows HTGF's palette (see `UI_STYLE.md`).
 
 TTS, persistent conversation history, and structured final summaries are not
@@ -27,7 +27,8 @@ Copy-Item .env.example .env
 ```
 
 Edit `.env` locally and set `ASSEMBLYAI_API_KEY` for transcription, plus
-`GEMINI_API_KEY` for Gemini and/or `OPENAI_API_KEY` for OpenAI replies. You only
+`ANTHROPIC_API_KEY` for Claude, `GEMINI_API_KEY` for Gemini, and/or
+`OPENAI_API_KEY` for OpenAI replies. You only
 need the key for the selected interview provider. If you already have `.env`, add the missing entry
 without copying over the existing file. Keep the keys private. Compose loads
 them into the backend at runtime; `.gitignore` excludes
@@ -99,7 +100,7 @@ Browser microphone -> AudioWorklet -> 100 ms mono PCM chunks
 Completed transcript -> browser interview queue (one request at a time)
     -> POST /api/interview/reply (settings + conversation history)
     -> interview instructions -> selected provider adapter
-    -> Gemini Interactions API or OpenAI Responses API
+    -> Anthropic Messages API, Gemini Interactions API, or OpenAI Responses API
     -> written reply -> browser conversation
 ```
 
@@ -108,7 +109,7 @@ Completed transcript -> browser interview queue (one request at a time)
 | `app/main.py` | Defines the FastAPI application and routes. |
 | `app/transcription.py` | Opens the authenticated STT session and relays audio/transcript events. |
 | `app/interview.py` | Validates settings/history and builds language/tone-aware interview instructions. |
-| `app/llm.py` | Defines the model catalog, provider interface, and Gemini/OpenAI adapters. |
+| `app/llm.py` | Defines the model catalog, provider interface, and Anthropic/Gemini/OpenAI adapters. |
 | `app/static/index.html` | Provides the page structure. |
 | `app/static/styles.css` | Styles the page. |
 | `app/static/app.js` | Manages Start/Stop, connection state, and transcript updates. |
@@ -157,7 +158,16 @@ Provider references: [streaming protocol](https://www.assemblyai.com/docs/stream
 ## Models and provider modularity
 
 `GET /api/interview/models` supplies the dropdown from `MODELS` in `app/llm.py`.
-The choices are `gemini-3.8-flash` (default), `gpt-5.4-mini`, and `gpt-5.4`.
+The choices are `claude-haiku-5-5` (default), `gemini-3.8-flash`, `gpt-5.4-mini`,
+and `gpt-5.4`. Claude uses Anthropic's asynchronous Messages API with thinking
+disabled, low effort, a 500-token output cap, and no automatic retries.
+Its adapter passes history as user/assistant messages and instructions as `system`.
+It extracts text blocks and rejects truncated, empty, or refused replies.
+The default prioritizes proof-of-concept cost: Haiku 5.5's standard price checked
+on 19 November 2026 is $0.10 per million input tokens and $0.50 per million output
+tokens for prompts up to 100,000 tokens. Longer prompts use higher rates.
+An illustrative 1,000-input/200-output-token call is $0.0002; full history counts
+again on subsequent requests. This is an estimate, not measured account billing.
 Gemini uses Google's asynchronous Interactions API with `thinking_level=low`
 and a 1,024-token output budget. The OpenAI models use the Responses API with
 reasoning effort `none` and a 500-token output cap. The shared interview prompt
@@ -169,7 +179,7 @@ parameters. To add a different provider, implement the asynchronous `TextProvide
 interface, register its instance in `PROVIDERS`, and add its model entries.
 Keep its credentials in environment variables and translate provider errors into
 `ReplyError`. The UI displays the provider alongside each model automatically.
-Gemini and OpenAI adapters are implemented. The Gemini adapter translates our
+Anthropic, Gemini, and OpenAI adapters are implemented. The Gemini adapter translates our
 `user`/`assistant` messages into `user_input`/`model_output` steps, preserving
 their order. It explicitly reads `GEMINI_API_KEY`; no key enters the browser.
 Google's SDK is pinned, including its Interactions-specific exception handling.
@@ -188,7 +198,8 @@ A successful new recording cancels
 the old browser request and ignores late replies. Aborting a browser request
 does not guarantee that an already-started provider request stops billing.
 
-Both adapters use `store=False` to avoid provider-managed conversation state; it is not a promise
+OpenAI and Gemini use `store=False`; Anthropic's Messages requests are stateless
+and receive the full history each time. These choices are not a promise
 of zero provider retention. Our app keeps context only in browser memory and
 does not write conversations to disk. The backend is stateless for this checkpoint.
 Reloading or starting a new recording loses the current conversation context.
@@ -201,6 +212,9 @@ References: [OpenAI text generation](https://developers.openai.com/api/docs/guid
 Gemini references: [Interactions API](https://aistudio.google.com/docs/interactions-overview),
 [thinking levels](https://aistudio.google.com/docs/thinking), and
 [Python SDK](https://googleapis.github.io/python-genai/).
+Anthropic references: [Haiku 5.5](https://platform.claude.com/docs/en/models/haiku-5-5/overview),
+[pricing](https://platform.claude.com/docs/en/about-claude/pricing), and
+[Python SDK](https://platform.claude.com/docs/en/cli-sdks-libraries/sdks/python).
 
 ## Useful checks
 
@@ -250,13 +264,18 @@ Manual browser checks still required:
 8. Stop while a reply is pending: it should still appear. Start another recording:
    an old pending reply must not appear in the new conversation.
 
-Current backend validation: 24 Python tests passed, including seven Gemini tests
-using the real SDK with a fake HTTP transport. They check history serialization,
-reply extraction, missing keys, sanitized errors, timeouts, cancellation, and
-disabled retries/continuations. The previous frontend checkpoint's 10 JavaScript
+Current backend validation: 31 Python tests passed, including seven Anthropic
+and seven Gemini tests using real SDKs with fake HTTP transports. They check
+history serialization, reply extraction, missing keys, sanitized errors, timeouts,
+cancellation, output limits, and disabled retries/continuations.
+The previous frontend checkpoint's 10 JavaScript
 tests passed; this integration does not change frontend conversation logic.
-The rebuilt service is healthy and the live model catalog includes all three
-choices. On 19 November, after loading the saved Gemini key, authenticated metadata
+The rebuilt service is healthy and its catalog defaults to Haiku with all four
+models available. One live request through `/api/interview/reply` using synthetic
+startup history returned a relevant German follow-up in 1.48 seconds on 19 November.
+This verifies Haiku connectivity and a basic reply; it does not establish interview
+quality across conversations or end-of-speech-to-audio latency.
+On 19 November, after loading the saved Gemini key, authenticated metadata
 access for `gemini-3.8-flash` succeeded. Two interview-generation requests timed
 out; an isolated short Interactions request returned HTTP 503. Successful live
 generation, interview quality, and latency remain unverified. The application

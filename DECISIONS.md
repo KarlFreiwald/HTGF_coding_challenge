@@ -245,9 +245,46 @@ Sources: [Google Interactions API](https://aistudio.google.com/docs/interactions
 [thinking levels](https://aistudio.google.com/docs/thinking),
 [Google Gen AI Python SDK](https://googleapis.github.io/python-genai/).
 
+### 14 — Low-cost Anthropic model as the proof-of-concept default
+
+**Choice (19 November 2026):** Add Anthropic using the configured `ANTHROPIC_API_KEY`
+and select `claude-haiku-5-5` as the default. The developer has Anthropic API credit
+and explicitly prioritizes a very cheap proof of concept. This supersedes decision
+13's default; existing Gemini and OpenAI selections remain available.
+
+**Reason:** Haiku 5.5 is the lowest-priced model in the current published Claude
+lineup for short prompts. Standard prices checked today are $0.10 per million
+input tokens and $0.50 per million output tokens for prompts up to 100,000 tokens;
+longer prompts cost more. A 1,000-input/200-output-token request is approximately
+$0.0002 before any other charges. Interview quality still requires evaluation.
+
+**Implementation:** A third `TextProvider` implementation uses async Anthropic
+Messages, the same generic message history, and the existing interview prompt.
+Set thinking disabled, effort low, a 500-token output limit, and zero automatic
+retries. Read only text content blocks and reject incomplete/refused responses.
+No more expensive fallback is configured. API keys remain server-side.
+
+**Tradeoffs:** Short, inexpensive replies may be less capable on nuanced answers.
+Disabling thinking fits the existing text-only history format and avoids reasoning
+token costs; richer reasoning or tool use would require revisiting this design.
+History is resent per request, so input usage grows over the conversation.
+
+**Validation:** 31 Python tests passed, including seven new Anthropic SDK/HTTP
+transport tests for history, budget settings, missing keys, sanitized errors,
+timeouts, refusals/truncation, cancellation, and default model selection.
+The Docker service is healthy. One live request through our interview endpoint
+returned a German professional-tone follow-up about a synthetic robot startup's
+pilot deployments in 1.48 seconds. This is a single text-reply measurement, not
+the complete voice latency or a broad assessment of interview quality.
+
+Sources: [Haiku overview](https://platform.claude.com/docs/en/models/haiku-5-5/overview),
+[pricing](https://platform.claude.com/docs/en/about-claude/pricing),
+[thinking configuration](https://platform.claude.com/docs/en/models/haiku-5-5/whats-new-haiku-5-5),
+[Python SDK](https://platform.claude.com/docs/en/cli-sdks-libraries/sdks/python).
+
 ## Open decisions
 
-- Evaluate Gemini interview quality and latency; compare OpenAI when account access is available.
+- Evaluate Haiku interview quality and latency; compare other providers when available.
 - TTS provider, model, and voices for both languages.
 - Tune AssemblyAI turn detection against actual German/English founder answers.
 - Whether a voice orchestration framework will help once LLM/TTS and interruptions are added.
