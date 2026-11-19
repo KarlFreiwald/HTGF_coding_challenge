@@ -94,7 +94,7 @@ class InterviewTests(unittest.IsolatedAsyncioTestCase):
         manager.__aenter__.return_value = client
         with patch.dict("os.environ", {"OPENAI_API_KEY": "test-only"}), patch.object(llm, "AsyncOpenAI", return_value=manager):
             with self.assertRaises(llm.ReplyError):
-                await llm.OpenAIProvider().reply(llm.MODELS[llm.DEFAULT_MODEL], "Instructions", [])
+                await llm.OpenAIProvider().reply(llm.MODELS["gpt-5.4-mini"], "Instructions", [])
 
     async def test_provider_error_body_is_not_exposed(self):
         response = SimpleNamespace(status_code=429, headers={}, request=SimpleNamespace())
@@ -105,7 +105,7 @@ class InterviewTests(unittest.IsolatedAsyncioTestCase):
         manager.__aenter__.return_value = client
         with patch.dict("os.environ", {"OPENAI_API_KEY": "test-only"}), patch.object(llm, "AsyncOpenAI", return_value=manager):
             with self.assertRaises(llm.ReplyError) as caught:
-                await llm.OpenAIProvider().reply(llm.MODELS[llm.DEFAULT_MODEL], "Instructions", [])
+                await llm.OpenAIProvider().reply(llm.MODELS["gpt-5.4-mini"], "Instructions", [])
         self.assertIn("quota or rate limit", str(caught.exception))
         self.assertNotIn("private-provider-detail", str(caught.exception))
         self.assertNotIn("not-for-browser", str(caught.exception))

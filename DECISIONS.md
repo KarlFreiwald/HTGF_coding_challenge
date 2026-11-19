@@ -202,9 +202,45 @@ Sources: [OpenAI text generation](https://developers.openai.com/api/docs/guides/
 [GPT-5.4 mini](https://developers.openai.com/api/docs/models/gpt-5.4-mini),
 [GPT-5.4](https://developers.openai.com/api/docs/models/gpt-5.4).
 
+### 13 — Add Gemini as the second interview provider
+
+**Choice (19 November 2026):** Add Google's `gemini-3.8-flash` using the Interactions
+API and make it the default selection. The developer configured `GEMINI_API_KEY`
+after difficulties obtaining an OpenAI API key. Keep both OpenAI model choices.
+This supersedes decision 12's initial default, while retaining its provider interface.
+
+**Reason:** Make progress using the available API account and exercise the provider
+boundary with a real second implementation. Model choice is practical here; no
+comparative quality or latency advantage over OpenAI has been established.
+
+**Implementation:** Add `GeminiProvider` and a model catalog entry in `app/llm.py`.
+Use the async Google SDK so provider I/O does not block audio handling. Translate
+our generic user/assistant history to Interactions user_input/model_output steps.
+Keep interview instructions and browser request logic unchanged. The existing
+model endpoint automatically exposes the additional dropdown option.
+
+**Tradeoffs:** Another pinned SDK dependency and provider-specific request/error
+handling. Stateless full-history calls preserve our simple cross-provider design;
+provider-managed continuation and potential caching benefits remain deferred.
+Use `store=False`, `thinking_level=low`, a 1,024-token output budget, one attempt,
+and no automatic continuation. The shared prompt requests short spoken-style
+answers. Response storage settings do not imply zero provider data retention.
+
+**Validation:** 24 Python tests passed. Gemini tests use the actual pinned SDK with
+a fake HTTP transport to verify serialized history, extracted text, sanitized
+errors, missing keys, timeout handling, cancellation, and no retries/continuations.
+The rebuilt service is healthy and exposes all three model choices. The first
+live check returned the expected missing-key error before contacting Google:
+the saved project `.env` did not yet contain `GEMINI_API_KEY`. Account/model
+access and live response quality therefore remain unverified at this checkpoint.
+
+Sources: [Google Interactions API](https://aistudio.google.com/docs/interactions-overview),
+[thinking levels](https://aistudio.google.com/docs/thinking),
+[Google Gen AI Python SDK](https://googleapis.github.io/python-genai/).
+
 ## Open decisions
 
-- Evaluate the two OpenAI models; choose and implement any additional provider.
+- Evaluate Gemini interview quality and latency; compare OpenAI when account access is available.
 - TTS provider, model, and voices for both languages.
 - Tune AssemblyAI turn detection against actual German/English founder answers.
 - Whether a voice orchestration framework will help once LLM/TTS and interruptions are added.
