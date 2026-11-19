@@ -256,8 +256,11 @@ reply extraction, missing keys, sanitized errors, timeouts, cancellation, and
 disabled retries/continuations. The previous frontend checkpoint's 10 JavaScript
 tests passed; this integration does not change frontend conversation logic.
 The rebuilt service is healthy and the live model catalog includes all three
-choices. Gemini account access still requires a live check after saving
-`GEMINI_API_KEY` in this project's `.env` and recreating the container.
+choices. On 19 November, after loading the saved Gemini key, authenticated metadata
+access for `gemini-3.8-flash` succeeded. Two interview-generation requests timed
+out; an isolated short Interactions request returned HTTP 503. Successful live
+generation, interview quality, and latency remain unverified. The application
+timeout was not increased to hide the failure.
 OpenAI still has simulated-response validation only; live account access remains
 unverified until an OpenAI key is configured.
 

@@ -231,8 +231,15 @@ a fake HTTP transport to verify serialized history, extracted text, sanitized
 errors, missing keys, timeout handling, cancellation, and no retries/continuations.
 The rebuilt service is healthy and exposes all three model choices. The first
 live check returned the expected missing-key error before contacting Google:
-the saved project `.env` did not yet contain `GEMINI_API_KEY`. Account/model
-access and live response quality therefore remain unverified at this checkpoint.
+the saved project `.env` did not yet contain `GEMINI_API_KEY`.
+
+**Live follow-up (19 November 2026):** After the developer saved the key and the
+container was recreated, authenticated metadata access for `gemini-3.8-flash`
+succeeded in 0.38 seconds. Two interview-generation requests timed out. A minimal
+"say hello" Interactions request, isolated from the interview prompt and given
+a 45-second diagnostic timeout, returned HTTP 503 after 4.23 seconds. This points
+to generation-service unavailability; successful generation and its quality or
+latency remain unverified. No application timeout or model was changed.
 
 Sources: [Google Interactions API](https://aistudio.google.com/docs/interactions-overview),
 [thinking levels](https://aistudio.google.com/docs/thinking),
