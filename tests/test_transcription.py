@@ -5,7 +5,7 @@ import json
 import unittest
 import tempfile
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 from urllib.parse import parse_qs, urlsplit
 
 from app import transcription as stt
@@ -77,6 +77,7 @@ class TranscriptionTests(unittest.IsolatedAsyncioTestCase):
         folder = self.enterContext(tempfile.TemporaryDirectory())
         self.enterContext(patch.dict("os.environ", {"INTERVIEW_DB": str(Path(folder) / "demo.sqlite")}))
         stt.storage.initialize()
+        self.summarize = self.enterContext(patch.object(stt.summaries, "after_close", new_callable=AsyncMock))
 
     async def run_session(self, browser, provider, interaction):
         with patch.dict("os.environ", {"ASSEMBLYAI_API_KEY": "test-secret", "ASSEMBLYAI_SPEECH_MODEL": stt.DEFAULT_MODEL}), \
@@ -111,6 +112,7 @@ class TranscriptionTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(browser.events[-1], {"type": "stopped"})
         settings, history = stt.storage.snapshot(browser.events[0]["conversation_id"])
         self.assertEqual(settings["status"], "ended")
+        self.summarize.assert_awaited_once_with(browser.events[0]["conversation_id"])
         self.assertEqual([m["content"] for m in history], ["Wir suchen 500.000 Euro."])
         query = parse_qs(urlsplit(connection.call_args.args[0]).query)
         self.assertEqual(query["sample_rate"], ["44100"])

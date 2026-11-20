@@ -405,6 +405,20 @@ List ended and interrupted sessions by start time, newest first. The archive sho
 saved messages in speaking order with speaker labels and the original session
 settings. Refreshing reads SQLite again. Viewing a transcript makes no provider calls.
 
+### 20 — Save structured summaries for internal review
+
+The founder-facing UI shows the transcript. After a normal Stop, the backend
+uses the selected model and interview language to summarize the committed
+transcript. It validates the fields and stores a separate SQLite row with the
+model, generation time and last included message position. Missing facts use SQL
+`NULL`. The summaries table can be inspected directly for the demonstration.
+Keeping the result out of the history API also keeps it out of browser payloads
+and the TTS pipeline.
+
+Each nonempty, normally ended interview can incur one additional model call.
+Empty and interrupted sessions retain their transcripts. If generation fails,
+the database still contains the source messages and the operator can retry.
+
 ## Open decisions
 
 - Evaluate Haiku interview quality and latency; compare other providers when available.
@@ -412,7 +426,7 @@ settings. Refreshing reads SQLite again. Viewing a transcript makes no provider 
 - Tune AssemblyAI turn detection against actual German/English founder answers.
 - Whether a voice orchestration framework will help once LLM/TTS and interruptions are added.
 - Backup approach for the local database.
-- Interview state management, summary schema, and whether to use tool calling.
+- Interview state management and whether to use tool calling.
 - Demonstration environment.
 
 ## How to maintain this log

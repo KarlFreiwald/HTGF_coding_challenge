@@ -4,7 +4,7 @@ import asyncio
 import json
 import logging
 import os
-from app import storage
+from app import storage, summaries
 from app.llm import DEFAULT_MODEL as DEFAULT_INTERVIEW_MODEL, MODELS
 from contextlib import suppress
 from typing import Literal
@@ -210,3 +210,6 @@ async def transcribe(browser: WebSocket) -> None:
             await asyncio.to_thread(storage.finish, conversation_id, "interrupted")
         with suppress(WebSocketDisconnect, RuntimeError, OSError):
             await browser.close()
+        if conversation_id:
+            # The socket and STT session are closed before this extra model request.
+            await summaries.after_close(conversation_id)

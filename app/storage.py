@@ -37,6 +37,14 @@ def initialize():
                 UNIQUE(conversation_id, position), UNIQUE(conversation_id, turn_id, role)
             );
             CREATE INDEX IF NOT EXISTS conversation_date ON conversations(started_at DESC);
+            CREATE TABLE IF NOT EXISTS summaries (
+                conversation_id TEXT PRIMARY KEY NOT NULL REFERENCES conversations(id),
+                generated_at TEXT NOT NULL, provider TEXT NOT NULL, model TEXT NOT NULL,
+                source_last_position INTEGER NOT NULL, overview TEXT NOT NULL,
+                startup_name TEXT, sector TEXT, team TEXT, product TEXT, development_stage TEXT,
+                traction TEXT, market TEXT, competition TEXT, financing_needs TEXT,
+                planned_round TEXT, next_step TEXT
+            );
         """)
         # A previous process cannot still own a WebSocket in our single-worker deployment.
         db.execute("UPDATE conversations SET status='interrupted' WHERE status='active'")
@@ -97,3 +105,28 @@ def past_conversations():
             WHERE status IN ('ended', 'interrupted') ORDER BY started_at DESC, rowid DESC
         """)
         return [dict(row) for row in rows]
+
+
+def summary_source(conversation_id):
+    with database() as db:
+        row = db.execute("""
+            SELECT c.* FROM conversations c LEFT JOIN summaries s ON s.conversation_id = c.id
+            WHERE c.id=? AND c.status='ended' AND s.conversation_id IS NULL
+        """, (conversation_id,)).fetchone()
+        if row:
+            return dict(row), messages(db, conversation_id)
+
+
+def save_summary(metadata, fields):
+    with database() as db:
+        db.execute("""
+            INSERT INTO summaries (
+                conversation_id, generated_at, provider, model, source_last_position,
+                overview, startup_name, sector, team, product, development_stage, traction,
+                market, competition, financing_needs, planned_round, next_step
+            ) VALUES (
+                :conversation_id, :generated_at, :provider, :model, :source_last_position,
+                :overview, :startup_name, :sector, :team, :product, :development_stage, :traction,
+                :market, :competition, :financing_needs, :planned_round, :next_step
+            ) ON CONFLICT(conversation_id) DO NOTHING
+        """, {**metadata, **fields, "generated_at": now()})

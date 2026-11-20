@@ -12,8 +12,21 @@ FastAPI saves finalized turns, generated replies and session settings to
 `data/interviews.sqlite`. Docker mounts the project's data folder at `/app/data`.
 Use **Past interviews** to open the read-only history in a separate tab. Select a
 timestamp to see the saved settings and transcript, including interrupted sessions.
-Use **Refresh history** to pick up newly ended sessions. Structured summaries are
-the next checkpoint.
+Use **Refresh history** to pick up newly ended sessions.
+
+After Stop closes an interview with finalized founder speech, FastAPI sends the saved
+transcript to the selected interview model for one additional request. It validates
+the structured result and writes it to the SQLite `summaries` table in the interview
+language. The founder sees the conversation transcript. The summary stays in SQLite,
+separate from history responses and speech playback. Fields that were never discussed
+have SQL `NULL` values.
+
+An empty or interrupted recording skips summary generation. On a provider or
+validation failure the backend logs the conversation ID and error type. To generate
+a missing summary for a finished interview, run
+`docker compose exec app python -m app.summaries <conversation-id>`. A saved
+summary prevents another sequential request. Existing interviews can be processed
+individually with the same command.
 
 ## Run locally with Docker
 
@@ -258,7 +271,7 @@ This checkpoint buffers a complete model reply and a complete MP3 before playbac
 It makes cancellation and sequencing easier to inspect, but adds latency compared
 with streaming text/audio. We have not established the PDF's <1–2 second target.
 No generated audio is saved by the application; provider retention follows their
-account policies. Structured summaries are planned for the next checkpoint.
+account policies.
 
 Reference: [ElevenLabs text-to-speech API](https://elevenlabs.io/docs/api-reference/text-to-speech/convert).
 
