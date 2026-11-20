@@ -8,10 +8,9 @@ to the selected Anthropic, Gemini, or OpenAI model with conversation context, la
 ElevenLabs reads each reply aloud using Eric and Flash v2.5.
 The UI follows HTGF's palette (see `UI_STYLE.md`).
 
-Persistent conversation history and structured final summaries are not
-implemented yet. Interview progression currently uses prompting, not a separate
-state machine. Transcripts stay in the current browser tab;
-starting a successful new recording replaces the previous transcript.
+FastAPI saves finalized turns, generated replies and session settings to
+`data/interviews.sqlite`. Docker mounts the project's data folder at `/app/data`.
+The history browser and structured summaries are upcoming checkpoints.
 
 ## Run locally with Docker
 
@@ -103,7 +102,8 @@ Browser microphone -> AudioWorklet -> 100 ms mono PCM chunks
     -> partial/final transcript events -> browser
 
 Completed transcript -> browser interview queue (one request at a time)
-    -> POST /api/interview/reply (settings + conversation history)
+    -> POST /api/interview/reply (conversation ID + saved turn ID)
+    -> read settings and ordered transcript from SQLite
     -> interview instructions -> selected provider adapter
     -> Anthropic Messages API, Gemini Interactions API, or OpenAI Responses API
     -> written reply -> browser conversation
@@ -121,7 +121,8 @@ Completed transcript -> browser interview queue (one request at a time)
 | `app/static/index.html` | Provides the page structure. |
 | `app/static/styles.css` | Styles the page. |
 | `app/static/app.js` | Manages Start/Stop, connection state, and transcript updates. |
-| `app/static/interview.js` | Deduplicates final turns, queues replies, and retains this recording's context. |
+| `app/static/interview.js` | Deduplicates final turns and queues replies by conversation and turn ID. |
+| `app/storage.py` | Saves finalized turns and settings and reads the ordered model context. |
 | `app/static/speech.js` | Fetches/decodes audio, controls playback, and gates microphone forwarding. |
 | `app/static/microphone.js` | Requests microphone access and manages the Web Audio graph. |
 | `app/static/pcm-worklet.js` | Converts samples to little-endian 16-bit mono PCM, with no audible output. |
@@ -156,8 +157,8 @@ via `ASSEMBLYAI_SPEECH_MODEL` after checking the provider's supported parameters
 
 Sessions are limited to 10 minutes. Disconnects and errors terminate the provider
 session; missing audio is timed out after 20 seconds. AssemblyAI bills session
-duration, including silence. Our application does not write audio or transcripts
-to disk. This is a localhost prototype with an origin check, not a public service
+duration, including silence. The application stores transcript text locally and discards audio.
+This is a localhost prototype with an origin check, not a public service
 with user authentication.
 
 Provider references: [streaming protocol](https://www.assemblyai.com/docs/streaming/message-sequence),
@@ -209,9 +210,8 @@ does not guarantee that an already-started provider request stops billing.
 
 OpenAI and Gemini use `store=False`; Anthropic's Messages requests are stateless
 and receive the full history each time. These choices are not a promise
-of zero provider retention. Our app keeps context only in browser memory and
-does not write conversations to disk. The backend is stateless for this checkpoint.
-Reloading or starting a new recording loses the current conversation context.
+of zero provider retention. A page reload ends the live interview. SQLite retains
+committed messages. On startup the single app worker marks abandoned sessions interrupted.
 Prompted topic coverage and follow-up limits need live evaluation; they are not
 deterministic workflow guarantees. Full-pipeline latency still needs measurement and tuning.
 
@@ -255,7 +255,7 @@ This checkpoint buffers a complete model reply and a complete MP3 before playbac
 It makes cancellation and sequencing easier to inspect, but adds latency compared
 with streaming text/audio. We have not established the PDF's <1–2 second target.
 No generated audio is saved by the application; provider retention follows their
-account policies. Conversation persistence and summaries remain separate next steps.
+account policies. The history view and summaries remain separate next steps.
 
 Reference: [ElevenLabs text-to-speech API](https://elevenlabs.io/docs/api-reference/text-to-speech/convert).
 

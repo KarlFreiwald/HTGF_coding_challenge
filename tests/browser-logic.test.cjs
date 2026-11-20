@@ -166,10 +166,11 @@ test("Final turns trigger speech; muted audio becomes silence; Stop cancels repl
   await ui.scope.start();
   const socket = ui.sockets[0];
   socket.onopen();
-  socket.emit({ type: "ready" });
+  socket.emit({ type: "ready", conversation_id: "session-1" });
   const interview = ui.interviews[0];
-  assert.equal(interview.settings.model, "gpt-5.4-mini");
-  assert.equal(interview.settings.tone, "professional");
+  assert.equal(interview.settings, "session-1");
+  assert.equal(JSON.parse(socket.sent[0]).tone, "professional");
+  assert.equal(JSON.parse(socket.sent[0]).model, "gpt-5.4-mini");
   assert.equal(ui.elements.get("#model").disabled, true);
   socket.emit({ type: "transcript", turn_id: 0, text: "We build", final: false });
   assert.equal(interview.turns.length, 0);

@@ -3,6 +3,8 @@
 import asyncio
 import json
 import unittest
+import tempfile
+from pathlib import Path
 from unittest.mock import patch
 from urllib.parse import parse_qs, urlsplit
 
@@ -71,6 +73,11 @@ class Provider:
 
 
 class TranscriptionTests(unittest.IsolatedAsyncioTestCase):
+    def setUp(self):
+        folder = self.enterContext(tempfile.TemporaryDirectory())
+        self.enterContext(patch.dict("os.environ", {"INTERVIEW_DB": str(Path(folder) / "demo.sqlite")}))
+        stt.storage.initialize()
+
     async def run_session(self, browser, provider, interaction):
         with patch.dict("os.environ", {"ASSEMBLYAI_API_KEY": "test-secret", "ASSEMBLYAI_SPEECH_MODEL": stt.DEFAULT_MODEL}), \
              patch.object(stt, "connect", return_value=provider) as connection:
@@ -91,7 +98,7 @@ class TranscriptionTests(unittest.IsolatedAsyncioTestCase):
         audio = b"\x01\x00" * 4410
 
         async def interaction(client):
-            self.assertEqual(await client.next_event(), {"type": "ready"})
+            self.assertEqual((await client.next_event())["type"], "ready")
             await client.incoming.put({"type": "websocket.receive", "bytes": audio})
             partial = await client.next_event()
             self.assertFalse(partial["final"])
@@ -102,6 +109,9 @@ class TranscriptionTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(sum(isinstance(frame, str) for frame in provider.sent), 1)
         self.assertTrue(browser.events[-2]["final"])
         self.assertEqual(browser.events[-1], {"type": "stopped"})
+        settings, history = stt.storage.snapshot(browser.events[0]["conversation_id"])
+        self.assertEqual(settings["status"], "ended")
+        self.assertEqual([m["content"] for m in history], ["Wir suchen 500.000 Euro."])
         query = parse_qs(urlsplit(connection.call_args.args[0]).query)
         self.assertEqual(query["sample_rate"], ["44100"])
         self.assertEqual(json.loads(query["language_codes"][0]), ["de"])
@@ -117,6 +127,7 @@ class TranscriptionTests(unittest.IsolatedAsyncioTestCase):
 
         connection = await self.run_session(browser, provider, interaction)
         self.assertEqual(json.loads(provider.sent[-1]), {"type": "Terminate"})
+        self.assertEqual(stt.storage.snapshot(browser.events[0]["conversation_id"])[0]["status"], "interrupted")
         query = parse_qs(urlsplit(connection.call_args.args[0]).query)
         self.assertEqual(json.loads(query["language_codes"][0]), ["en"])
 

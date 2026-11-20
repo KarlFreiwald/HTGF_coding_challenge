@@ -140,7 +140,7 @@ async function start() {
 
     socket.onopen = () => {
       if (session.finished) { socket.close(); return; }
-      socket.send(JSON.stringify({ type: "start", language: session.settings.language, sample_rate: sampleRate }));
+      socket.send(JSON.stringify({ type: "start", ...session.settings, sample_rate: sampleRate }));
     };
     socket.onmessage = ({ data }) => {
       if (session.finished) return;
@@ -156,7 +156,7 @@ async function start() {
             setStatus(message);
             setReplyStatus(message);
           });
-          session.interview = new Interview(session.settings,
+          session.interview = new Interview(event.conversation_id,
             async (text) => {
               if (session.finished || session.stopping) return;
               addReply(text, session.modelLabel);

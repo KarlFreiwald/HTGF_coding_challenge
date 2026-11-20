@@ -4,6 +4,8 @@ import asyncio
 import json
 import logging
 import os
+from app import storage
+from app.llm import DEFAULT_MODEL as DEFAULT_INTERVIEW_MODEL, MODELS
 from contextlib import suppress
 from typing import Literal
 from urllib.parse import urlencode, urlsplit
@@ -26,6 +28,8 @@ MAX_SESSION_SECONDS = 600
 class StartMessage(BaseModel):
     type: Literal["start"]
     language: Literal["de", "en"]
+    tone: Literal["professional", "conversational"] = "professional"
+    model: str = DEFAULT_INTERVIEW_MODEL
     sample_rate: int = Field(ge=8000, le=48000, strict=True)
 
 
@@ -52,7 +56,7 @@ def transcript_event(message: dict) -> dict:
     }
 
 
-async def relay(browser: WebSocket, provider, sample_rate: int) -> None:
+async def relay(browser: WebSocket, provider, sample_rate: int, conversation_id: str) -> None:
     """Run both directions concurrently; wait for the last turn after Stop."""
     termination_sent = False
 
@@ -91,7 +95,12 @@ async def relay(browser: WebSocket, provider, sample_rate: int) -> None:
         while True:
             message = json.loads(await provider.recv())
             if message.get("type") == "Turn":
-                await browser.send_json(transcript_event(message))
+                event = transcript_event(message)
+                if event["final"] and event["text"].strip():
+                    saved = await asyncio.to_thread(storage.append, conversation_id, event["turn_id"], "user", event["text"])
+                    if not saved:
+                        continue
+                await browser.send_json(event)
             elif message.get("type") == "Termination":
                 return
             elif message.get("type") == "Error":
@@ -109,6 +118,7 @@ async def relay(browser: WebSocket, provider, sample_rate: int) -> None:
                 raise TranscriptionError("Final transcription timed out. The last turn may be incomplete.") from exc
         else:
             receiver.result()
+        await asyncio.to_thread(storage.finish, conversation_id, "ended" if termination_sent else "interrupted")
         await browser.send_json({"type": "stopped"})
     finally:
         for task in (sender, receiver):
@@ -134,6 +144,7 @@ async def transcribe(browser: WebSocket) -> None:
         return
 
     await browser.accept()
+    conversation_id = None
     try:
         api_key = os.environ.get("ASSEMBLYAI_API_KEY", "").strip()
         if not api_key:
@@ -141,6 +152,8 @@ async def transcribe(browser: WebSocket) -> None:
 
         raw_start = await asyncio.wait_for(browser.receive_json(), timeout=START_TIMEOUT)
         start = StartMessage.model_validate(raw_start)
+        if start.model not in MODELS:
+            raise TranscriptionError("Choose a configured interview model.")
         model = os.environ.get("ASSEMBLYAI_SPEECH_MODEL", DEFAULT_MODEL).strip() or DEFAULT_MODEL
 
         # A bounded session also covers clients that stay connected indefinitely.
@@ -160,9 +173,10 @@ async def transcribe(browser: WebSocket) -> None:
                     applied_model = begin.get("configuration", {}).get("model")
                     if applied_model and applied_model != model:
                         raise TranscriptionError("AssemblyAI selected an unexpected model. Check the configured speech model.")
-                    await browser.send_json({"type": "ready"})
+                    conversation_id = await asyncio.to_thread(storage.start, start.language, start.tone, start.model, MODELS[start.model].provider)
+                    await browser.send_json({"type": "ready", "conversation_id": conversation_id})
                     relay_started = True
-                    await relay(browser, provider, start.sample_rate)
+                    await relay(browser, provider, start.sample_rate, conversation_id)
                 finally:
                     # Covers disconnection during Begin/ready, before relay takes over.
                     if not relay_started:
@@ -192,5 +206,7 @@ async def transcribe(browser: WebSocket) -> None:
         logger.warning("Transcription failure: %s", type(exc).__name__)
         await send_error(browser, "Transcription could not continue. Please try again.")
     finally:
+        if conversation_id:
+            await asyncio.to_thread(storage.finish, conversation_id, "interrupted")
         with suppress(WebSocketDisconnect, RuntimeError, OSError):
             await browser.close()

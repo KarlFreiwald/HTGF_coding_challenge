@@ -2,10 +2,12 @@
 
 import asyncio
 from typing import Literal
+from uuid import UUID
+from app import storage
 from urllib.parse import urlsplit
 
 from fastapi import APIRouter, HTTPException, Request
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
 
 from app.llm import DEFAULT_MODEL, MODELS, PROVIDERS, ReplyError
 
@@ -79,7 +81,6 @@ async def models() -> dict:
     }
 
 
-@router.post("/reply")
 async def reply(body: ReplyRequest, request: Request) -> dict[str, str]:
     origin = request.headers.get("origin")
     if origin and urlsplit(origin).netloc != request.headers.get("host"):
@@ -98,3 +99,49 @@ async def reply(body: ReplyRequest, request: Request) -> dict[str, str]:
     except TimeoutError:
         raise HTTPException(504, "The model took too long to respond. Try a new recording.") from None
     return {"text": text, "model": body.model}
+
+
+class SavedTurn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    conversation_id: UUID
+    turn_id: int = Field(ge=0, strict=True)
+
+
+_generating: set[str] = set()
+
+
+@router.post("/reply")
+async def saved_reply(body: SavedTurn, request: Request):
+    origin = request.headers.get("origin")
+    if origin and urlsplit(origin).netloc != request.headers.get("host"):
+        raise HTTPException(403, "Cross-origin requests are not allowed")
+    key = str(body.conversation_id)
+    if key in _generating:
+        raise HTTPException(409, "A reply is already being generated.")
+    _generating.add(key)
+    try:
+        snapshot = await asyncio.to_thread(storage.snapshot, key)
+        if snapshot is None:
+            raise HTTPException(404, "Conversation not found.")
+        settings, history = snapshot
+        if settings["status"] != "active":
+            raise HTTPException(409, "The interview has ended.")
+        if not any(m["role"] == "user" and m["turn_id"] == body.turn_id for m in history):
+            raise HTTPException(409, "This turn has not been saved.")
+        last = history[-1]
+        if last["turn_id"] != body.turn_id:
+            return {"superseded": True}
+        if last["role"] == "assistant":
+            return {"text": last["content"], "model": settings["model"]}
+        try:
+            context = ReplyRequest(model=settings["model"], language=settings["language"], tone=settings["tone"],
+                                   messages=[{"role": m["role"], "content": m["content"]} for m in history])
+        except ValidationError:
+            raise HTTPException(422, "Saved conversation exceeds the interview model's input limits.") from None
+        result = await reply(context, request)
+        if await request.is_disconnected():
+            return {"superseded": True}
+        saved = await asyncio.to_thread(storage.append, key, body.turn_id, "assistant", result["text"])
+        return result if saved else {"superseded": True}
+    finally:
+        _generating.discard(key)

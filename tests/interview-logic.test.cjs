@@ -16,11 +16,11 @@ function makeInterview() {
   vm.runInContext(fs.readFileSync("app/static/interview.js", "utf8").replace("export class", "class"), scope);
   const Interview = vm.runInContext("Interview", scope);
   const settings = { model: "gpt-5.4", language: "de", tone: "professional" };
-  const interview = new Interview(settings, (text) => replies.push(text), (...status) => statuses.push(status));
+  const interview = new Interview("conversation-1", (text) => replies.push(text), (...status) => statuses.push(status));
   return { interview, settings, calls, replies, statuses };
 }
 
-test("Final turns deduplicate, requests serialize, settings stay fixed and history includes replies", async () => {
+test("Final turns deduplicate and request the saved conversation by ID", async () => {
   const ui = makeInterview();
   ui.interview.addTurn(0, "We build robots.");
   ui.interview.addTurn(0, "We build robots.");
@@ -30,12 +30,7 @@ test("Final turns deduplicate, requests serialize, settings stay fixed and histo
   ui.calls[0].resolve({ text: "Who is on the team?" });
   await tick();
   assert.equal(ui.calls.length, 2);
-  assert.equal(ui.calls[1].body.model, "gpt-5.4");
-  assert.deepEqual(ui.calls[1].body.messages, [
-    { role: "user", content: "We build robots." },
-    { role: "assistant", content: "Who is on the team?" },
-    { role: "user", content: "Five engineers." },
-  ]);
+  assert.deepEqual(ui.calls[1].body, { conversation_id: "conversation-1", turn_id: 1 });
   ui.calls[1].resolve({ text: "How far along is the product?" });
   await tick();
   assert.equal(ui.replies.length, 2);
@@ -62,7 +57,6 @@ test("API error stops paid retries and preserves the transcript history", async 
   ui.interview.addTurn(2, "Still speaking");
   assert.equal(ui.calls.length, 1);
   assert.equal(ui.replies.length, 0);
-  assert.equal(ui.interview.history[0].content, "Hello");
   assert.equal(ui.statuses.at(-1)[1], "error");
   assert.match(ui.statuses.at(-1)[0], /OPENAI_API_KEY/);
 });

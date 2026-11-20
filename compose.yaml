@@ -3,6 +3,8 @@ name: htgf-voice-agent
 services:
   app:
     build: .
+    volumes:
+      - ./data:/app/data
     env_file:
       - path: .env
         required: false

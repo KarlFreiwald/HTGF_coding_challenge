@@ -321,13 +321,90 @@ end-to-end voice latency. Browser playback and pronunciation remain manual check
 
 Source: [ElevenLabs text-to-speech API](https://elevenlabs.io/docs/api-reference/text-to-speech/convert).
 
+### 16 — Persist conversation text and structured results, without audio
+
+**Choice:** Save conversations with start/end timestamps and settings (language,
+tone, selected model), ordered messages identifying each speaker, and a structured
+interview summary. Do not persist microphone recordings or generated speech as
+part of conversation history. The developer explicitly agreed to this scope.
+
+**Reason:** Page 1 of the challenge requires visible speaker-attributed transcripts,
+accessible past conversations with timestamps, and a saved structured result.
+Audio recordings are not requested. Text is sufficient for reviewing interviews
+and generating summaries, while avoiding additional audio storage. Saving settings
+supports reproducibility and is our design choice, rather than an explicit requirement.
+
+**Summary scope:** Startup identity, team, product/development stage, traction,
+market/competition, financing needs and planned round, plus sector and next step.
+Missing information should remain explicitly unknown. Page 2 suggests example
+fields under the tool-calling bonus; tool calling and those exact field names
+are not mandatory. The precise schema and extraction approach remain to be agreed.
+
+**Tradeoff:** We cannot replay the original interview audio to investigate a
+transcription error. Audio is still processed temporarily by the pipeline;
+this application storage decision does not change external provider retention.
+The previously generated synthetic voice-test samples are local diagnostic files,
+not saved conversation recordings.
+
+**Status:** Scope agreed; persistence is not implemented. Database choice is
+resolved by decision 17; the storage lifecycle remains open.
+
+### 17 — SQLite for conversation persistence
+
+**Choice:** Use SQLite for conversations, ordered messages, settings, and structured
+summaries. The developer selected SQLite after comparing JSON files and PostgreSQL.
+
+**Why it fits:** This prototype runs as one local FastAPI service with modest data
+volume and short, infrequent writes. SQLite provides transactions, relational
+constraints, indexes, and SQL queries without a separate database server, network
+connection, database credentials, or another Compose service. Relationships between
+conversations, messages, and summaries map naturally to relational storage. Its
+small operational footprint fits the limited development time and local demonstration.
+
+**Compared with JSON files:** Files are human-readable and useful for exports, but
+we would need to implement safe concurrent updates, cross-record consistency, and
+history lookup ourselves. SQLite supplies these database capabilities while retaining
+local file-based storage. JSON remains a possible summary format or export format;
+the database choice does not rule it out for structured content.
+
+**Compared with PostgreSQL:** PostgreSQL is a stronger candidate for many concurrent
+writers, multiple application servers, and a shared network database. For this
+checkpoint, those benefits do not justify another service, connection configuration,
+credentials, and operational setup. It remains a reasonable future migration target.
+
+**Accepted limitations:** SQLite permits only one writer at a time; writes must stay
+short, and external API calls must not run inside write transactions. Multiple users
+are possible, but sustained write contention or deployment across multiple hosts
+would trigger reassessment. A later PostgreSQL migration would still require schema,
+query, and data migration work; it is not assumed to be automatic.
+
+**Persistence:** Store the database outside the container's disposable writable layer
+using persistent Docker storage. This preserves it across app container replacement,
+and requires a separate backup. We chose a bind mount from `./data` to `/app/data`
+so the developer can open `data/interviews.sqlite` directly on Windows. Conversation
+data stays out of Git; the existing ignore rules cover database files and local data.
+
+**Status:** Database engine selected; implementation has not started.
+
+Reference: [SQLite appropriate uses and concurrency limits](https://www.sqlite.org/whentouse.html).
+
+### 18 — Use the saved transcript as interview context
+
+The transcription relay commits each finalized founder turn to SQLite before
+notifying the browser. The browser requests a reply by conversation and turn ID.
+FastAPI loads settings and ordered messages, releases the database connection,
+calls the model, and commits its answer before playback. A failed model request
+leaves the founder's words available. When a newer final turn arrives during
+generation, the queued request uses the updated transcript. A superseded model
+request can still incur a charge.
+
 ## Open decisions
 
 - Evaluate Haiku interview quality and latency; compare other providers when available.
 - Evaluate Eric in German/English and decide whether separate voices are needed.
 - Tune AssemblyAI turn detection against actual German/English founder answers.
 - Whether a voice orchestration framework will help once LLM/TTS and interruptions are added.
-- Storage for transcripts, timestamps, settings, and structured summaries.
+- History view, behavior when reopening a conversation, and backup approach.
 - Interview state management, summary schema, and whether to use tool calling.
 - Demonstration environment.
 

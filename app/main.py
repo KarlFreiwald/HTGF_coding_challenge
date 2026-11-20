@@ -1,4 +1,6 @@
 from pathlib import Path
+from contextlib import asynccontextmanager
+from app import storage
 
 from fastapi import FastAPI
 from fastapi.responses import FileResponse
@@ -11,7 +13,13 @@ from app.speech import router as speech_router
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 
-app = FastAPI(title="Startup Interview API", version="0.1.0")
+@asynccontextmanager
+async def lifespan(app):
+    storage.initialize()
+    yield
+
+
+app = FastAPI(title="Startup Interview API", version="0.1.0", lifespan=lifespan)
 app.include_router(transcription_router)
 app.include_router(interview_router)
 app.include_router(speech_router)
