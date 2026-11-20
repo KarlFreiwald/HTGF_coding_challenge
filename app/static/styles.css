@@ -25,6 +25,11 @@
 
 body { margin: 0; }
 
+main a { color: var(--htgf-fond-dark); text-underline-offset: 0.2em; }
+main a:focus-visible { outline: 2px solid var(--htgf-focus); outline-offset: 3px; }
+#saved-interview { max-width: 100%; margin: 8px 8px 8px 0; }
+label[for="saved-interview"] { display: block; }
+
 main {
   max-width: 880px;
   margin: 8vh auto;

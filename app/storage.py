@@ -88,3 +88,12 @@ def snapshot(conversation_id):
         row = db.execute("SELECT * FROM conversations WHERE id=?", (conversation_id,)).fetchone()
         if row:
             return dict(row), messages(db, conversation_id)
+
+
+def past_conversations():
+    with database() as db:
+        rows = db.execute("""
+            SELECT id, started_at, status, language FROM conversations
+            WHERE status IN ('ended', 'interrupted') ORDER BY started_at DESC, rowid DESC
+        """)
+        return [dict(row) for row in rows]

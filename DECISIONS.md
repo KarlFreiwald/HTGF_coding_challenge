@@ -398,13 +398,20 @@ leaves the founder's words available. When a newer final turn arrives during
 generation, the queued request uses the updated transcript. A superseded model
 request can still incur a charge.
 
+### 19 — Read-only interview history
+
+Open past interviews in a separate browser tab so the live recording can continue.
+List ended and interrupted sessions by start time, newest first. The archive shows
+saved messages in speaking order with speaker labels and the original session
+settings. Refreshing reads SQLite again. Viewing a transcript makes no provider calls.
+
 ## Open decisions
 
 - Evaluate Haiku interview quality and latency; compare other providers when available.
 - Evaluate Eric in German/English and decide whether separate voices are needed.
 - Tune AssemblyAI turn detection against actual German/English founder answers.
 - Whether a voice orchestration framework will help once LLM/TTS and interruptions are added.
-- History view, behavior when reopening a conversation, and backup approach.
+- Backup approach for the local database.
 - Interview state management, summary schema, and whether to use tool calling.
 - Demonstration environment.
 

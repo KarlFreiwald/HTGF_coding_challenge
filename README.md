@@ -10,7 +10,10 @@ The UI follows HTGF's palette (see `UI_STYLE.md`).
 
 FastAPI saves finalized turns, generated replies and session settings to
 `data/interviews.sqlite`. Docker mounts the project's data folder at `/app/data`.
-The history browser and structured summaries are upcoming checkpoints.
+Use **Past interviews** to open the read-only history in a separate tab. Select a
+timestamp to see the saved settings and transcript, including interrupted sessions.
+Use **Refresh history** to pick up newly ended sessions. Structured summaries are
+the next checkpoint.
 
 ## Run locally with Docker
 
@@ -255,7 +258,7 @@ This checkpoint buffers a complete model reply and a complete MP3 before playbac
 It makes cancellation and sequencing easier to inspect, but adds latency compared
 with streaming text/audio. We have not established the PDF's <1–2 second target.
 No generated audio is saved by the application; provider retention follows their
-account policies. The history view and summaries remain separate next steps.
+account policies. Structured summaries are planned for the next checkpoint.
 
 Reference: [ElevenLabs text-to-speech API](https://elevenlabs.io/docs/api-reference/text-to-speech/convert).
 
