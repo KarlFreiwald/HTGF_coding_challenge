@@ -15,7 +15,7 @@ export class Speech {
     this.muted = true;
     this.controller = new AbortController();
     const timer = setTimeout(() => this.controller?.abort(), 35000);
-    this.onStatus("Preparing speech. Microphone forwarding is paused.");
+    this.onStatus("Preparing voice · Mic paused", "synthesizing");
     try {
       const response = await fetch("/api/speech", {
         method: "POST",
@@ -42,7 +42,7 @@ export class Speech {
       this.source = this.context.createBufferSource();
       this.source.buffer = audio;
       this.source.connect(this.context.destination);
-      this.onStatus("The interviewer is speaking. Microphone forwarding is paused.");
+      this.onStatus("Interviewer speaking · Mic paused", "speaking");
       await new Promise((resolve, reject) => {
         // Also release if a browser suspends playback instead of firing onended.
         const playbackTimer = setTimeout(() => reject(new Error("Audio playback timed out.")), (audio.duration + 5) * 1000);

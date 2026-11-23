@@ -8,7 +8,9 @@ const language = document.querySelector("#language");
 const model = document.querySelector("#model");
 const tone = document.querySelector("#tone");
 const replyStatus = document.querySelector("#reply-status");
-const meter = document.querySelector("#microphone-level");
+const page = document.querySelector("#interview");
+const orb = document.querySelector("#voice-orb");
+const thread = document.querySelector("#chat-thread");
 const transcript = document.querySelector("#transcript");
 const emptyTranscript = document.querySelector("#empty-transcript");
 const turnAnnouncement = document.querySelector("#turn-announcement");
@@ -45,6 +47,7 @@ async function loadModels() {
 }
 
 function addReply(text, modelLabel) {
+  const follow = atLatest();
   const item = document.createElement("li");
   item.dataset.speaker = "assistant";
   const label = document.createElement("span");
@@ -53,9 +56,14 @@ function addReply(text, modelLabel) {
   const content = document.createElement("p");
   content.textContent = text;
   item.append(label, content);
-  transcript.prepend(item);
+  transcript.append(item);
+  if (follow) thread.scrollTop = thread.scrollHeight;
   emptyTranscript.hidden = true;
   turnAnnouncement.textContent = `Interviewer: ${text}`;
+}
+
+function atLatest() {
+  return thread.scrollHeight - thread.clientHeight - thread.scrollTop <= 48;
 }
 
 function setStatus(text, state = "pending") {
@@ -76,27 +84,31 @@ function finish(session, message, isError = false) {
   }
   if (current !== session) return;
   current = null;
-  meter.value = 0;
-  recordingButton.textContent = "Start recording";
+  page.dataset.view = session.ready ? "ended" : "setup";
+  orb.dataset.phase = "idle";
+  recordingButton.textContent = session.ready ? "Start another interview" : "Start interview";
   recordingButton.disabled = false;
   language.disabled = false;
   model.disabled = false;
   tone.disabled = false;
   setStatus(message, isError ? "error" : "ok");
-  setReplyStatus("Interview stopped. Written replies remain below.", "ok");
+  setReplyStatus("");
+  recordingButton.focus();
 }
 
 function updateTranscript(session, event) {
   if (!Number.isInteger(event.turn_id) || typeof event.text !== "string") return;
   if (!event.text.trim()) return;
+  const follow = atLatest();
   let turn = session.turns.get(event.turn_id);
   if (!turn) {
     const item = document.createElement("li");
+    item.dataset.speaker = "user";
     const label = document.createElement("span");
     label.className = "turn-label";
     const text = document.createElement("p");
     item.append(label, text);
-    transcript.prepend(item);
+    transcript.append(item);
     turn = { item, label, text, final: false };
     session.turns.set(event.turn_id, turn);
     emptyTranscript.hidden = true;
@@ -106,7 +118,8 @@ function updateTranscript(session, event) {
   turn.text.textContent = event.text;
   turn.final = event.final;
   turn.item.dataset.final = String(event.final);
-  turn.label.textContent = `You · Turn ${event.turn_id + 1} · ${event.final ? "Complete" : "Listening"}`;
+  turn.label.textContent = event.final ? "You" : "You · Transcribing…";
+  if (follow) thread.scrollTop = thread.scrollHeight;
   if (event.final) {
     turnAnnouncement.textContent = `Completed turn: ${event.text}`;
     if (!session.stopping) session.interview.addTurn(event.turn_id, event.text);
@@ -118,11 +131,12 @@ async function start() {
   const session = {
     microphone: new Microphone(), socket: null, timer: null,
     turns: new Map(), ready: false, stopping: false, finished: false,
-    settings: { model: model.value, language: language.value, tone: tone.value },
+    settings: { model: model.value, language: document.querySelector("[name=language]:checked").value,
+      tone: document.querySelector("[name=tone]:checked").value },
     modelLabel: model.selectedOptions[0].textContent,
   };
   current = session;
-  recordingButton.textContent = "Stop recording";
+  recordingButton.textContent = "Cancel";
   recordingButton.disabled = false;
   language.disabled = true;
   model.disabled = true;
@@ -150,11 +164,15 @@ async function start() {
           if (session.ready) return;
           clearTimeout(session.timer);
           session.ready = true;
+          page.dataset.view = "live";
+          recordingButton.textContent = "End interview";
+          document.querySelector("#chat-title").focus();
           displayedInterview?.cancel();
-          session.speech = new Speech(session.microphone.context, (message) => {
+          session.speech = new Speech(session.microphone.context, (message, phase) => {
             if (session.finished || session.stopping) return;
+            orb.dataset.phase = phase;
             setStatus(message);
-            setReplyStatus(message);
+            setReplyStatus("");
           });
           session.interview = new Interview(event.conversation_id,
             async (text) => {
@@ -163,15 +181,21 @@ async function start() {
               try {
                 await session.speech.speak(text, session.settings.language);
                 if (session.finished || session.stopping) return;
-                setReplyStatus("Your turn. Answer aloud when you are ready.", "ok");
+                setReplyStatus("");
               } catch (error) {
                 if (session.finished || session.stopping) return;
                 setReplyStatus(`${error.message} Read the written reply and continue aloud.`, "error");
               }
-              setStatus("Listening. Your turn.", "ok");
-            }, setReplyStatus);
+              orb.dataset.phase = "listening";
+              setStatus("Listening · Your turn", "ok");
+            }, (message, state) => {
+              if (session.stopping || session.finished) return;
+              orb.dataset.phase = state === "error" ? "listening" : "thinking";
+              setStatus(state === "error" ? "Listening" : "Preparing a reply…", state);
+              setReplyStatus(state === "error" ? message : "", state);
+            });
           displayedInterview = session.interview;
-          setReplyStatus("Introduce your startup to begin. The interviewer will reply aloud and in writing.");
+          setReplyStatus("");
           transcript.replaceChildren();
           emptyTranscript.hidden = false;
           turnAnnouncement.textContent = "";
@@ -185,13 +209,15 @@ async function start() {
             const muted = session.speech.muted || (session.stopping && session.stopMuted);
             if (muted) new Uint8Array(buffer).fill(0);
             socket.send(buffer);
-            meter.value = muted ? 0 : Math.min(1, level * 5);
+            const strength = muted ? 0 : Math.min(1, level * 5);
+            orb.style.setProperty("--scale", String(1 + strength * 0.23));
           }, () => finish(session, "Microphone capture stopped unexpectedly. Please restart.", true));
-          setStatus("Listening. Speak naturally; completed turns will appear below.", "ok");
+          orb.dataset.phase = "listening";
+          setStatus("Listening · Your turn", "ok");
         } else if (event.type === "transcript") {
           updateTranscript(session, event);
         } else if (event.type === "stopped") {
-          finish(session, "Recording stopped. Your transcript remains below.");
+          finish(session, "Interview ended.");
         } else if (event.type === "error") {
           finish(session, event.message || "Transcription failed. Please try again.", true);
         }
@@ -221,7 +247,8 @@ async function stop() {
   session.stopMuted = session.speech?.muted;
   session.interview?.cancel();
   session.speech?.cancel();
-  setReplyStatus("Stopping the interview…");
+  orb.dataset.phase = "stopping";
+  setReplyStatus("");
   recordingButton.textContent = "Stopping…";
   recordingButton.disabled = true;
   if (!session.ready) {
@@ -232,7 +259,6 @@ async function stop() {
   try {
     // Flush the AudioWorklet's last chunk before sending the stop command.
     await session.microphone.stop();
-    meter.value = 0;
     if (session.finished) return;
     session.socket.send(JSON.stringify({ type: "stop" }));
     session.timer = setTimeout(() => {
@@ -243,7 +269,15 @@ async function stop() {
   }
 }
 
-recordingButton.addEventListener("click", () => current ? stop() : start());
+recordingButton.addEventListener("click", () => {
+  if (page.dataset.view === "ended") {
+    page.dataset.view = "setup";
+    recordingButton.textContent = "Start interview";
+    setStatus("");
+    return;
+  }
+  return current ? stop() : start();
+});
 window.addEventListener("pagehide", () => {
   displayedInterview?.cancel();
   if (current) finish(current, "Recording stopped.");

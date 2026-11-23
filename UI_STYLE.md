@@ -50,6 +50,12 @@ their availability and usage terms before adding them.
 
 ## Sources
 
+On 23 November 2026 we checked the desktop header's **Mein Pitch** control in Chrome.
+At rest its fill is transparent with a black inset outline. Hovering the wrapper
+reveals HTGF's gradient image on the link's overlay at 60% opacity. The prototype
+uses a white pill and a locally defined pastel gradient on hover and keyboard focus.
+The link leads to the [pitch-deck intake](https://www.htgf.de/pitch-deck-upload/).
+
 - [HTGF homepage and inline theme presets](https://www.htgf.de/)
 - [HTGF theme stylesheet](https://www.htgf.de/wp-content/themes/htgf/assets/css/theme.css?ver=6.3.59)
 - [HTGF button stylesheet](https://www.htgf.de/wp-content/themes/htgf/assets/css/blocks-overwrites/core-buttons.css?ver=6.3.59)

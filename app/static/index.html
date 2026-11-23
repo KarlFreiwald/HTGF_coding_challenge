@@ -8,51 +8,49 @@
     <script src="/static/app.js" type="module"></script>
   </head>
   <body>
-    <main>
-      <p class="eyebrow">HTGF coding challenge · Development preview</p>
-      <h1>Every startup has a <em>story.</em></h1>
-      <p class="intro">A space to talk about your team, your product, and what comes next.</p>
-      <a href="/history" target="_blank" rel="noopener">Past interviews (opens in a new tab)</a>
-      <section aria-labelledby="recording-heading">
-        <h2 id="recording-heading">Tell us about your startup</h2>
-        <p class="note">Choose your language, tone, and model, then introduce your startup.
-          Audio is sent to AssemblyAI; conversation text is sent to the selected model provider
-          (Anthropic, Google Gemini, or OpenAI) for interview replies.
-          Reply text is sent to ElevenLabs for spoken playback.</p>
-        <div class="recording-controls">
-          <label for="language">Conversation language
-            <select id="language">
-              <option value="de">Deutsch</option>
-              <option value="en">English</option>
-            </select>
-          </label>
-          <label for="tone">Interview tone
-            <select id="tone">
-              <option value="professional">Professional</option>
-              <option value="conversational">Conversational</option>
-            </select>
-          </label>
-          <label for="model">Interview model
-            <select id="model" disabled aria-describedby="settings-note">
-              <option>Loading models…</option>
-            </select>
-          </label>
-          <button id="recording-toggle" type="button" disabled>Start recording</button>
+    <main id="interview" data-view="setup">
+      <header class="masthead">
+        <span>Startup Interview</span>
+        <a class="pill" href="/history" target="_blank" rel="noopener">Past interviews <span aria-hidden="true">↗</span><span class="sr-only"> (opens in a new tab)</span></a>
+      </header>
+      <div class="content">
+        <section class="setup" aria-labelledby="setup-title">
+          <h1 id="setup-title">Every startup has a <em>story.</em></h1>
+          <p class="intro">Introduce your startup in a voice interview about your team, product, and plans.</p>
+          <div class="preferences">
+            <fieldset id="language"><legend>Conversation language</legend>
+              <label><input type="radio" name="language" value="de" checked><span>Deutsch</span></label>
+              <label><input type="radio" name="language" value="en"><span>English</span></label>
+            </fieldset>
+            <fieldset id="tone"><legend>Interview tone</legend>
+              <label><input type="radio" name="tone" value="professional" checked><span>Professional</span></label>
+              <label><input type="radio" name="tone" value="conversational"><span>Conversational</span></label>
+            </fieldset>
+            <label class="model-setting" for="model">Interview model
+              <select id="model" disabled><option>Loading models…</option></select>
+            </label>
+          </div>
+          <details><summary>How your interview is processed</summary>
+            <p>AssemblyAI transcribes your voice. Your selected model generates replies and a final summary. ElevenLabs reads the replies aloud. The app saves text locally. Sessions last up to 10 minutes.</p>
+          </details>
+        </section>
+        <section class="chat" aria-labelledby="chat-title">
+          <h1 id="chat-title" tabindex="-1">Your <em>interview.</em></h1>
+          <div id="chat-thread" tabindex="0" role="region" aria-label="Interview transcript">
+            <p id="empty-transcript">Introduce your startup when you’re ready.</p>
+            <ol id="transcript" aria-label="Conversation in speaking order"></ol>
+          </div>
+          <p id="turn-announcement" class="sr-only" aria-live="polite"></p>
+        </section>
+        <div class="voice-bar">
+          <div id="voice-orb" aria-hidden="true" data-phase="idle"></div>
+          <div class="feedback">
+            <p id="connection-status" role="status"></p>
+            <p id="reply-status" role="status"></p>
+          </div>
+          <button id="recording-toggle" type="button" disabled>Start interview</button>
         </div>
-        <p id="settings-note" class="note">Settings apply to the next recording and stay fixed while recording.</p>
-        <p id="connection-status" role="status" aria-live="polite">Ready when you are.</p>
-        <label class="level-label" for="microphone-level">Microphone level</label>
-        <meter id="microphone-level" min="0" max="1" value="0">0</meter>
-      </section>
-      <section aria-labelledby="transcript-heading">
-        <h2 id="transcript-heading">Conversation</h2>
-        <p id="reply-status" role="status" aria-live="polite">Interview replies will appear here after you speak.</p>
-        <p id="empty-transcript" class="note">Your words will appear here as you speak.</p>
-        <ol id="transcript" reversed aria-label="Conversation, newest first"></ol>
-        <p id="turn-announcement" class="sr-only" aria-live="polite"></p>
-      </section>
-      <p class="note">Voice interview preview · Wait until the interviewer finishes speaking before answering.
-        Finalized transcripts and interview settings are saved locally. Sessions end after 10 minutes.</p>
+      </div>
     </main>
   </body>
 </html>

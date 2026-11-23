@@ -37,7 +37,12 @@ for (const rate of [16000, 44100, 48000]) {
 
 function makeUI() {
   class Element {
-    constructor() { this.children = []; this.dataset = {}; this.value = "de"; this.textContent = ""; }
+    constructor() {
+      this.children = []; this.dataset = {}; this.value = "de"; this.textContent = "";
+      this.style = { setProperty: (key, value) => { this.style[key] = value; } };
+      this.scrollHeight = this.scrollTop = this.clientHeight = 0;
+    }
+    focus() {}
     addEventListener(type, fn) { this[type] = fn; }
     append(...children) { this.children.push(...children); }
     prepend(...children) { this.children.unshift(...children); }
@@ -88,27 +93,29 @@ function makeUI() {
   });
   const source = fs.readFileSync("app/static/app.js", "utf8").replace(/^import .*;\s*/gm, "");
   vm.runInContext(source, scope);
-  elements.get("#tone").value = "professional";
+  scope.document.querySelector("[name=tone]:checked").value = "professional";
   return { scope, elements, sockets, microphones, interviews, speeches, ready: vm.runInContext("modelLoading", scope) };
 }
 
-test("One button starts/stops; newest turns stay on top without duplicate partials", async () => {
+test("Setup transitions to chat; new turns append and partials update in place", async () => {
   const ui = makeUI();
   await ui.ready;
   const button = ui.elements.get("#recording-toggle");
   await button.click();
-  assert.equal(button.textContent, "Stop recording");
+  assert.equal(button.textContent, "Cancel");
   assert.equal(button.disabled, false);
   const socket = ui.sockets[0];
   socket.onopen();
   socket.emit({ type: "ready" });
+  assert.equal(ui.elements.get("#interview").dataset.view, "live");
+  assert.equal(button.textContent, "End interview");
   socket.emit({ type: "transcript", turn_id: 0, text: "We", final: false });
   socket.emit({ type: "transcript", turn_id: 0, text: "We build", final: false });
   const list = ui.elements.get("#transcript");
   assert.equal(list.children.length, 1);
   socket.emit({ type: "transcript", turn_id: 1, text: "Our team has five people.", final: true });
   assert.equal(list.children.length, 2);
-  assert.equal(list.children[0].children[1].textContent, "Our team has five people.");
+  assert.equal(list.children[1].children[1].textContent, "Our team has five people.");
   await button.click();
   assert.equal(button.textContent, "Stopping…");
   assert.equal(button.disabled, true);
@@ -118,11 +125,13 @@ test("One button starts/stops; newest turns stay on top without duplicate partia
   socket.emit({ type: "transcript", turn_id: 0, text: "We build robots.", final: true });
   socket.emit({ type: "stopped" });
   assert.equal(list.children.length, 2);
-  assert.equal(list.children[0].children[1].textContent, "Our team has five people.");
-  assert.equal(list.children[1].children[1].textContent, "We build robots.");
-  assert.equal(button.textContent, "Start recording");
+  assert.equal(list.children[1].children[1].textContent, "Our team has five people.");
+  assert.equal(list.children[0].children[1].textContent, "We build robots.");
+  assert.equal(button.textContent, "Start another interview");
   assert.equal(button.disabled, false);
   // Restart creates a fresh session and clears previous turns only when ready.
+  await button.click();
+  assert.equal(ui.elements.get("#interview").dataset.view, "setup");
   await button.click();
   ui.sockets[1].onopen();
   ui.sockets[1].emit({ type: "ready" });
@@ -140,7 +149,7 @@ test("Cancellation during permission setup cannot open a stale socket", async ()
   assert.equal(ui.sockets.length, 0);
   assert.equal(ui.microphones[0].closed, true);
   assert.equal(ui.elements.get("#language").disabled, false);
-  assert.equal(button.textContent, "Start recording");
+  assert.equal(button.textContent, "Start interview");
   assert.equal(button.disabled, false);
 });
 
@@ -157,7 +166,7 @@ test("Unexpected disconnect releases microphone and marks unfinished text", asyn
   assert.equal(ui.elements.get("#connection-status").dataset.state, "error");
   assert.equal(ui.elements.get("#transcript").children[0].children[0].textContent, "Incomplete turn");
   assert.equal(ui.elements.get("#recording-toggle").disabled, false);
-  assert.equal(ui.elements.get("#recording-toggle").textContent, "Start recording");
+  assert.equal(ui.elements.get("#recording-toggle").textContent, "Start another interview");
 });
 
 test("Final turns trigger speech; muted audio becomes silence; Stop cancels replies and restart is clean", async () => {
@@ -177,15 +186,15 @@ test("Final turns trigger speech; muted audio becomes silence; Stop cancels repl
   socket.emit({ type: "transcript", turn_id: 0, text: "We build robots.", final: true });
   await interview.onReply("<b>Who is on your team?</b>");
   const list = ui.elements.get("#transcript");
-  assert.equal(list.children[0].dataset.speaker, "assistant");
-  assert.equal(list.children[0].children[1].textContent, "<b>Who is on your team?</b>");
+  assert.equal(list.children[1].dataset.speaker, "assistant");
+  assert.equal(list.children[1].children[1].textContent, "<b>Who is on your team?</b>");
   assert.equal(ui.speeches[0].text, "<b>Who is on your team?</b>");
   assert.equal(ui.speeches[0].language, "de");
   ui.speeches[0].muted = true;
   const audio = new Uint8Array(9600).fill(42);
   ui.microphones[0].onAudio(audio.buffer, 0.5);
   assert.equal(audio.every((value) => value === 0), true);
-  assert.equal(ui.elements.get("#microphone-level").value, 0);
+  assert.equal(ui.elements.get("#voice-orb").style["--scale"], "1");
   ui.speeches[0].muted = false;
   const unmuted = new Uint8Array(9600).fill(42);
   ui.microphones[0].onAudio(unmuted.buffer, 0.5);
@@ -198,7 +207,7 @@ test("Final turns trigger speech; muted audio becomes silence; Stop cancels repl
   assert.equal(ui.speeches[0].cancelled, true);
   await interview.onReply("Late reply");
   assert.equal(list.children.length, 3);
-  assert.equal(list.children[0].children[1].textContent, "Final words.");
+  assert.equal(list.children[2].children[1].textContent, "Final words.");
   await ui.scope.start();
   ui.sockets[1].onopen();
   ui.sockets[1].emit({ type: "ready" });

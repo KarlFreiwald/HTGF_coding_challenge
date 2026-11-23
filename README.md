@@ -64,15 +64,15 @@ that it is running, open:
 - Health response: <http://localhost:8000/health>
 - Interactive HTTP API documentation: <http://localhost:8000/docs>
 
-Select language, tone, and model, click **Start recording**, allow microphone
-access, and wait for **Listening** before speaking. The same button switches to
-**Stop recording**; click it to release the
+Select language, tone, and model, click **Start interview**, allow microphone
+access, and wait for **Listening** before speaking. The chat opens when transcription
+connects. Click **End interview** in the voice bar to release the
 microphone and finish the final transcript. The browser microphone indicator
 should turn off. Use a current Chrome or Edge browser for the first manual test.
 Microphone capture requires localhost or HTTPS.
 
 The button briefly shows **Stopping…** while the last transcript is received,
-then returns to **Start recording**. New turns appear at the top; updates to an
+then shows **Start another interview** to reopen setup. New turns appear at the bottom; updates to an
 existing turn replace its text in place without changing its position.
 Introduce your startup first, then listen to the interviewer's question and answer
 aloud once the status returns to **Listening**. Replies also appear in the conversation

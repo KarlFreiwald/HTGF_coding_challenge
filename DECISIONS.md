@@ -419,6 +419,15 @@ Each nonempty, normally ended interview can incur one additional model call.
 Empty and interrupted sessions retain their transcripts. If generation fails,
 the database still contains the source messages and the operator can retry.
 
+### 21 — Separate interview setup from the live conversation
+
+The founder chooses language, tone and model on the setup screen. A successful
+connection opens a chat with the newest messages at the bottom, superseding the
+ordering in decision 11. The voice bar stays in view while the transcript scrolls.
+Its orb follows microphone level while listening and has separate synthesis and
+playback states. Text labels and reduced-motion support keep these states readable.
+The header and controls draw on the homepage's outlined Mein Pitch action.
+
 ## Open decisions
 
 - Evaluate Haiku interview quality and latency; compare other providers when available.
