@@ -27,7 +27,7 @@ class SummaryTests(unittest.IsolatedAsyncioTestCase):
         with storage.database() as db:
             return db.execute("SELECT * FROM summaries WHERE conversation_id=?", (self.key,)).fetchone()
 
-    async def test_stop_saves_validated_record_once_and_history_exposes_only_transcript(self):
+    async def test_stop_saves_validated_record_once_and_history_reads_it_separately(self):
         storage.append(self.key, 0, "user", "Hallo")
         storage.append(self.key, 0, "assistant", "Was brauchen Sie?")
         storage.append(self.key, 1, "user", "500.000 Euro")
@@ -45,7 +45,10 @@ class SummaryTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(saved["financing_needs"], "500.000 Euro")
         self.assertIsNone(saved["planned_round"])
         public = history_detail(UUID(self.key), Response())
-        self.assertNotIn(saved["overview"], json.dumps(public))
+        self.assertEqual(public["summary"]["overview"], saved["overview"])
+        self.assertEqual(set(public["summary"]), set(summaries.Summary.model_fields))
+        self.assertNotIn(saved["overview"], json.dumps(public["messages"]))
+        self.model.reply.assert_awaited_once()
         self.assertEqual(len(public["messages"]), 3)
 
     async def test_empty_and_interrupted_interviews_skip_model(self):

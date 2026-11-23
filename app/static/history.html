@@ -16,8 +16,20 @@
         <button type="button" id="refresh-history">Refresh history</button>
         <p id="history-status" role="status">Loading interviews…</p>
         <article id="saved-detail" hidden>
-          <h2>Saved transcript</h2>
+          <h2 id="interview-title">Interview details</h2>
           <p id="saved-settings" class="note"></p>
+          <div id="summary-panel" aria-labelledby="summary-heading" hidden>
+            <p class="note">AI-generated summary</p>
+            <h3 id="summary-heading">At a glance</h3>
+            <p id="overview"></p>
+            <dl id="highlights"></dl>
+            <details id="summary-details">
+              <summary>Full summary</summary>
+              <dl id="summary-fields"></dl>
+            </details>
+          </div>
+          <p id="summary-status" role="status"></p>
+          <h3>Saved transcript</h3>
           <ol id="transcript" aria-label="Saved conversation in speaking order"></ol>
         </article>
       </section>

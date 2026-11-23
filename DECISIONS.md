@@ -428,6 +428,14 @@ Its orb follows microphone level while listening and has separate synthesis and
 playback states. Text labels and reduced-motion support keep these states readable.
 The header and controls draw on the homepage's outlined Mein Pitch action.
 
+### 22 — Show the saved summary above archived transcripts
+
+Someone reviewing a past interview needs the gist before reading the dialogue.
+Show the stored overview and known highlights first, with the full structured
+summary in a disclosure and the transcript beneath it. This updates decision 20
+for history only. The demo shares the archive on localhost. A deployed review
+interface would require authenticated staff access enforced by the history API.
+
 ## Open decisions
 
 - Evaluate Haiku interview quality and latency; compare other providers when available.

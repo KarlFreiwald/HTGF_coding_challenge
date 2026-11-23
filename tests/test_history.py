@@ -39,6 +39,7 @@ class HistoryTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(result["conversation"]["tone"], "professional")
             self.assertIsNotNone(result["conversation"]["ended_at"])
             saved = (await client.get(f"/api/history/{interrupted}")).json()
+            self.assertIsNone(saved["summary"])
             self.assertEqual(saved["conversation"]["status"], "interrupted")
             self.assertEqual(saved["messages"][0]["content"], "Unanswered turn")
             self.assertEqual((await client.post(f"/api/history/{ended}")).status_code, 405)

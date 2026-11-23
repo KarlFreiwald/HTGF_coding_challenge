@@ -107,6 +107,16 @@ def past_conversations():
         return [dict(row) for row in rows]
 
 
+def saved_summary(conversation_id):
+    with database() as db:
+        row = db.execute("""
+            SELECT overview, startup_name, sector, team, product, development_stage,
+                   traction, market, competition, financing_needs, planned_round, next_step
+            FROM summaries WHERE conversation_id=?
+        """, (conversation_id,)).fetchone()
+        return dict(row) if row else None
+
+
 def summary_source(conversation_id):
     with database() as db:
         row = db.execute("""

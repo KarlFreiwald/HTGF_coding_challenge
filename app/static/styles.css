@@ -76,6 +76,13 @@ summary { cursor: pointer; width: fit-content; }
 main:not(#interview) section { background: white; padding: 1.25rem; border-radius: 1rem; margin: 1.5rem 0; }
 main:not(#interview) a { color: inherit; }
 #saved-interview { margin: .5rem 0; }
+#summary-panel { background: white; border: 1px solid var(--htgf-grey); border-left: 3px solid var(--htgf-mint); border-radius: .85rem; padding: 1.1rem 1.3rem; overflow-wrap: anywhere; }
+#summary-panel h3, #summary-panel .note { margin: 0; }
+#overview { font-size: 1.15rem; margin: .65rem 0; }
+#summary-panel dl { display: grid; grid-template-columns: fit-content(32%) 1fr; gap: .4rem 1rem; }
+#summary-panel dt { font-weight: 600; }
+#summary-panel dd { margin: 0; }
+#summary-panel details { margin-bottom: 0; }
 label[for="saved-interview"] { display: block; }
 .note { font-size: .875rem; }
 @media (max-width: 36rem) {

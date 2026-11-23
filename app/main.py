@@ -56,4 +56,4 @@ def history_detail(conversation_id: UUID, response: Response):
         raise HTTPException(404, "Past interview not found.")
     settings, messages = saved
     response.headers["Cache-Control"] = "no-store"
-    return {"conversation": settings, "messages": messages}
+    return {"conversation": settings, "messages": messages, "summary": storage.saved_summary(str(conversation_id))}

@@ -17,9 +17,13 @@ Use **Refresh history** to pick up newly ended sessions.
 After Stop closes an interview with finalized founder speech, FastAPI sends the saved
 transcript to the selected interview model for one additional request. It validates
 the structured result and writes it to the SQLite `summaries` table in the interview
-language. The founder sees the conversation transcript. The summary stays in SQLite,
-separate from history responses and speech playback. Fields that were never discussed
-have SQL `NULL` values.
+language. Past interviews shows the saved overview and key facts above the transcript.
+Expand **Full summary** for all topics. Missing facts use SQL `NULL` and appear as
+“Not discussed” in the expanded view. Opening history only reads local data.
+
+The local demo shares one read-only archive. For a deployment, founders would use
+the interview flow and authorized HTGF staff would review history. The backend would
+need to enforce staff access on both the list and individual interview endpoints.
 
 An empty or interrupted recording skips summary generation. On a provider or
 validation failure the backend logs the conversation ID and error type. To generate
